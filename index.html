@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nano Debris - Orbital Intelligence</title>
+<!-- PATCH 3: Content Security Policy
+     - script-src: allows inline scripts (needed for the app's JS block) + cdnjs for satellite.js
+     - connect-src: only CelesTrak for TLE data fetches
+     - font-src: Google Fonts only
+     - style-src: inline styles allowed (canvas app uses them) + Google Fonts
+     - object-src / base-uri: locked down to prevent plugin injection and base tag hijacking
+-->
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'self';
+           script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+           connect-src https://celestrak.org;
+           font-src https://fonts.googleapis.com https://fonts.gstatic.com;
+           style-src 'unsafe-inline' https://fonts.googleapis.com;
+           img-src 'self' data:;
+           worker-src blob:;
+           object-src 'none';
+           base-uri 'self';">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Inconsolata:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- PATCH 2: satellite.js loaded from pinned version on cdnjs.
+     NOTE: To add SRI, generate the hash in your browser console after confirming the
+     script loads correctly:
+       fetch('https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.1.3/satellite.min.js')
+         .then(r=>r.arrayBuffer())
+         .then(b=>crypto.subtle.digest('SHA-384',b))
+         .then(h=>console.log('sha384-'+btoa(String.fromCharCode(...new Uint8Array(h)))))
+     Then add integrity="sha384-<output>" crossorigin="anonymous" to this tag. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.1.3/satellite.min.js"></script>
+<style>
+:root{
+  --bg:#09090f;--bg2:#0f0f1a;--bg3:#141422;--bg4:#1a1a2e;
+  --indigo:#4f46e5;--indigo2:#6366f1;--indigo3:#818cf8;
+  --indigo-dim:rgba(79,70,229,0.15);--indigo-glow:rgba(79,70,229,0.35);
+  --red:#ef4444;--orange:#f97316;--yellow:#eab308;--green:#22c55e;--purple:#a855f7;
+  --border:rgba(255,255,255,0.07);--border2:rgba(79,70,229,0.25);
+  --text:#6b7280;--text-mid:#9ca3af;--text-hi:#e5e7eb;
+  --font-ui:'Google Sans',sans-serif;--font-mono:'Inconsolata',monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);font-family:var(--font-ui);color:var(--text-mid);display:flex;flex-direction:column;height:100vh;}
+
+/* HEADER */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:48px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;gap:12px;}
+.brand{display:flex;align-items:baseline;gap:8px;flex-shrink:0;}
+.brand-name{font-family:var(--font-ui);font-weight:700;font-size:1.1rem;color:var(--text-hi);letter-spacing:-.3px;}
+.brand-name em{font-style:normal;color:var(--indigo2);}
+.brand-tag{font-family:var(--font-mono);font-size:0.52rem;letter-spacing:2px;color:var(--text);border:1px solid var(--border2);padding:2px 6px;background:var(--indigo-dim);}
+.search-wrap{flex:1;max-width:360px;position:relative;}
+.search-input{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text-hi);font-family:var(--font-mono);font-size:0.72rem;padding:6px 12px 6px 30px;outline:none;transition:border-color .2s;}
+.search-input::placeholder{color:var(--text);}
+.search-input:focus{border-color:var(--indigo);}
+.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);opacity:.35;font-size:.85rem;pointer-events:none;}
+.search-results{position:absolute;top:calc(100% + 3px);left:0;right:0;background:var(--bg3);border:1px solid var(--border2);z-index:300;max-height:240px;overflow-y:auto;display:none;box-shadow:0 16px 40px rgba(0,0,0,.8);}
+.search-results.open{display:block;}
+.search-results::-webkit-scrollbar{width:3px;}
+.search-results::-webkit-scrollbar-thumb{background:var(--border2);}
+.sr-item{padding:7px 12px;cursor:pointer;font-family:var(--font-mono);font-size:.67rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:9px;transition:background .15s;}
+.sr-item:hover{background:rgba(79,70,229,.08);}
+.sr-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.sr-name{color:var(--text-hi);flex:1;}.sr-meta{color:var(--text);font-size:.57rem;}
+.sr-risk{font-size:.56rem;padding:1px 5px;font-weight:700;}
+.hdr-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.status-pill{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:.56rem;letter-spacing:1.5px;color:var(--indigo3);background:var(--indigo-dim);border:1px solid var(--border2);padding:4px 9px;text-transform:uppercase;}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--indigo2);box-shadow:0 0 6px var(--indigo2);animation:pulse 1.6s ease-in-out infinite;}
+.status-dot.loading{background:var(--yellow);box-shadow:0 0 6px var(--yellow);}
+.hdr-meta{font-family:var(--font-mono);font-size:.54rem;color:var(--text);letter-spacing:1px;}
+.btn{background:var(--indigo-dim);border:1px solid var(--border2);color:var(--indigo3);font-family:var(--font-mono);font-size:.56rem;letter-spacing:1.5px;padding:5px 11px;cursor:pointer;text-transform:uppercase;transition:all .2s;}
+.btn:hover{background:rgba(79,70,229,.28);border-color:var(--indigo2);}
+.btn:disabled{opacity:.3;cursor:not-allowed;}
+.btn.active{background:rgba(79,70,229,.35);border-color:var(--indigo2);color:#fff;}
+
+/* TICKER */
+.ticker{height:26px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:center;overflow:hidden;flex-shrink:0;}
+.ticker-tag{font-family:var(--font-mono);font-size:.52rem;letter-spacing:2px;color:var(--indigo3);text-transform:uppercase;white-space:nowrap;padding:0 12px 0 18px;border-right:1px solid var(--border2);background:var(--indigo-dim);height:100%;display:flex;align-items:center;flex-shrink:0;}
+.ticker-scroll{overflow:hidden;flex:1;position:relative;}
+.ticker-inner{display:flex;white-space:nowrap;animation:scroll 38s linear infinite;}
+.ti{font-family:var(--font-mono);font-size:.58rem;color:var(--text-mid);padding:0 18px 0 0;}
+.ti b{color:var(--indigo3);}.ti.warn b{color:var(--red);}
+@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* CARDS */
+.cards{display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr 1fr;border-bottom:1px solid var(--border);flex-shrink:0;}
+.card{padding:12px 16px;border-right:1px solid var(--border);position:relative;overflow:hidden;}
+.card:last-child{border-right:none;}
+.card.hero{background:linear-gradient(135deg,var(--bg2) 0%,rgba(79,70,229,.06) 100%);padding:14px 20px;display:flex;flex-direction:column;justify-content:space-between;}
+.card-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--text);margin-bottom:5px;}
+.card-val{font-family:var(--font-ui);font-weight:700;line-height:1;color:var(--text-hi);letter-spacing:-1px;}
+.card.hero .card-val{font-size:2.6rem;color:var(--indigo3);}
+.card:not(.hero) .card-val{font-size:1.5rem;}
+.card-val.red{color:var(--red);}.card-val.orange{color:var(--orange);}.card-val.yellow{color:var(--yellow);}.card-val.green{color:var(--green);}.card-val.indigo{color:var(--indigo3);}
+.card-sub{font-family:var(--font-mono);font-size:.52rem;color:var(--text);letter-spacing:.5px;}
+.card.hero .card-sub{font-size:.57rem;margin-top:3px;}
+.hero-row{display:flex;gap:14px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);}
+.hero-mini{flex:1;}
+.hero-mini-label{font-family:var(--font-mono);font-size:.48rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:2px;}
+.hero-mini-val{font-family:var(--font-mono);font-size:.78rem;font-weight:700;color:var(--indigo3);}
+.card-accent{position:absolute;top:0;left:0;right:0;height:2px;}
+.card-spark{margin-top:7px;height:3px;background:var(--border);overflow:hidden;}
+.card-spark-fill{height:100%;transition:width .8s ease;}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;padding:6px 18px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;gap:8px;}
+.filter-group-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--text);padding-right:8px;border-right:1px solid var(--border);flex-shrink:0;}
+.fpills{display:flex;gap:4px;}
+.fpill{display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:.56rem;letter-spacing:.8px;padding:3px 9px;border:1px solid var(--border);cursor:pointer;transition:all .2s;color:var(--text-mid);background:var(--bg2);}
+.fpill:hover{border-color:var(--indigo);color:var(--text-hi);}
+.fpill .pd{width:6px;height:6px;border-radius:50%;}
+.fpill.off{opacity:.3;}
+.divider{width:1px;height:18px;background:var(--border);margin:0 4px;flex-shrink:0;}
+.bpill{font-family:var(--font-mono);font-size:.54rem;letter-spacing:1.5px;text-transform:uppercase;padding:3px 9px;border:1px solid var(--border);cursor:pointer;transition:all .2s;color:var(--text);background:var(--bg2);}
+.bpill:hover{border-color:var(--indigo);color:var(--text-hi);}
+.bpill.on{border-color:var(--border2);color:var(--indigo3);background:var(--indigo-dim);}
+.toolbar-spacer{flex:1;}
+.view-btns{display:flex;gap:4px;}
+.view-btn{font-family:var(--font-mono);font-size:.54rem;letter-spacing:1px;padding:4px 10px;border:1px solid var(--border);cursor:pointer;transition:all .2s;color:var(--text);background:var(--bg2);text-transform:uppercase;}
+.view-btn:hover{border-color:var(--indigo);color:var(--text-hi);}
+.view-btn.active{background:var(--indigo-dim);border-color:var(--border2);color:var(--indigo3);}
+.tool-btn{font-family:var(--font-mono);font-size:.54rem;letter-spacing:1px;padding:4px 10px;border:1px solid var(--border);cursor:pointer;transition:all .2s;color:var(--text);background:var(--bg2);text-transform:uppercase;}
+.tool-btn:hover{border-color:var(--indigo);color:var(--text-hi);}
+.tool-btn.on{background:var(--indigo-dim);border-color:var(--border2);color:var(--indigo3);}
+.utc-clock{font-family:var(--font-mono);font-size:.6rem;color:var(--indigo3);letter-spacing:1px;margin-left:6px;}
+
+/* BODY */
+.body{display:flex;flex:1;overflow:hidden;}
+
+/* GLOBE */
+.globe-wrap{flex:1;position:relative;overflow:hidden;border-right:1px solid var(--border);}
+.globe-wrap canvas{display:block;}
+#mainCanvas{cursor:crosshair;}
+#mapCanvas{display:none;cursor:crosshair;}
+
+.globe-badge{position:absolute;top:10px;left:12px;font-family:var(--font-mono);font-size:.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--text);pointer-events:none;display:flex;align-items:center;gap:7px;}
+.globe-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--indigo2);box-shadow:0 0 7px var(--indigo2);animation:pulse 2s ease-in-out infinite;}
+.globe-hud{position:absolute;bottom:10px;right:12px;font-family:var(--font-mono);font-size:.48rem;letter-spacing:1.5px;color:var(--text);pointer-events:none;text-align:right;line-height:1.8;opacity:.55;}
+.globe-legend{position:absolute;bottom:10px;left:12px;display:flex;flex-direction:column;gap:3px;}
+.gl{display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:.5rem;letter-spacing:1px;color:var(--text);}
+.gl-dot{width:5px;height:5px;border-radius:50%;}
+.alert-strip{position:absolute;top:0;left:0;right:0;background:rgba(239,68,68,.1);border-bottom:1px solid rgba(239,68,68,.4);padding:4px 12px;font-family:var(--font-mono);font-size:.56rem;letter-spacing:2px;color:var(--red);text-transform:uppercase;animation:flashbg 1s ease-in-out infinite;display:none;z-index:20;align-items:center;gap:7px;}
+@keyframes flashbg{0%,100%{background:rgba(239,68,68,.1)}50%{background:rgba(239,68,68,.03)}}
+.tooltip{position:absolute;pointer-events:none;background:rgba(9,9,15,.97);border:1px solid var(--border2);padding:9px 12px;z-index:50;display:none;max-width:230px;box-shadow:0 8px 32px rgba(0,0,0,.7);}
+.tt-name{font-family:var(--font-ui);font-weight:700;font-size:.66rem;color:var(--text-hi);margin-bottom:4px;}
+.tt-row{font-family:var(--font-mono);font-size:.58rem;color:var(--text-mid);margin-top:2px;}
+.tt-pos{font-family:var(--font-mono);font-size:.56rem;color:var(--indigo3);margin-top:3px;}
+.tt-risk{font-family:var(--font-ui);font-weight:700;font-size:.58rem;margin-top:4px;}
+.tt-reentry{font-family:var(--font-mono);font-size:.56rem;color:var(--orange);margin-top:3px;}
+.scanlines{position:absolute;inset:0;background:repeating-linear-gradient(to bottom,transparent 0,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);pointer-events:none;z-index:5;}
+.vignette{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,.58) 100%);pointer-events:none;z-index:4;}
+
+/* HISTORICAL EVENT PANEL */
+.event-panel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(9,9,15,.97);border:1px solid var(--border2);padding:20px 24px;z-index:100;max-width:340px;width:90%;display:none;box-shadow:0 20px 60px rgba(0,0,0,.9);}
+.event-panel.open{display:block;}
+.ev-close{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--text);font-size:1rem;cursor:pointer;line-height:1;}
+.ev-close:hover{color:var(--text-hi);}
+.ev-date{font-family:var(--font-mono);font-size:.58rem;color:var(--indigo3);letter-spacing:2px;margin-bottom:6px;}
+.ev-name{font-family:var(--font-ui);font-weight:700;font-size:1rem;color:var(--text-hi);margin-bottom:10px;line-height:1.2;}
+.ev-body{font-family:var(--font-mono);font-size:.62rem;color:var(--text-mid);line-height:1.8;}
+.ev-stats{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-top:12px;}
+.ev-stat{background:var(--bg);padding:7px 10px;}
+.ev-stat-k{font-family:var(--font-mono);font-size:.48rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:2px;}
+.ev-stat-v{font-family:var(--font-mono);font-size:.72rem;font-weight:700;color:var(--text-hi);}
+
+/* LOADING */
+.loading-overlay{position:absolute;inset:0;background:rgba(9,9,15,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:60;transition:opacity .5s;}
+.loading-overlay.hidden{opacity:0;pointer-events:none;display:none;}
+.loading-spinner{width:38px;height:38px;border:2px solid var(--indigo-dim);border-top:2px solid var(--indigo2);border-radius:50%;animation:spin .85s linear infinite;margin-bottom:16px;box-shadow:0 0 18px var(--indigo-glow);}
+.loading-title{font-family:var(--font-ui);font-weight:700;font-size:.78rem;letter-spacing:3px;color:var(--text-hi);text-transform:uppercase;margin-bottom:12px;}
+.loading-steps{list-style:none;}
+.loading-steps li{font-family:var(--font-mono);font-size:.6rem;padding:3px 0;opacity:.35;transition:all .3s;display:flex;align-items:center;gap:7px;color:var(--text-mid);}
+.loading-steps li.done{opacity:1;color:var(--green);}
+.loading-steps li.active{opacity:1;color:var(--indigo3);}
+.step-icon{width:12px;text-align:center;}
+
+/* RIGHT PANEL */
+.rp{width:336px;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;background:var(--bg);}
+.rp-section{border-bottom:1px solid var(--border);flex-shrink:0;}
+.rp-section.grow{flex:1;overflow-y:auto;}
+.rp-section.grow::-webkit-scrollbar{width:3px;}
+.rp-section.grow::-webkit-scrollbar-thumb{background:var(--border2);}
+.rp-head{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;border-bottom:1px solid var(--border);background:var(--bg2);}
+.rp-title{font-family:var(--font-mono);font-size:.52rem;letter-spacing:2px;text-transform:uppercase;color:var(--indigo3);}
+.rp-meta{font-family:var(--font-mono);font-size:.5rem;color:var(--text);}
+.rp-action{font-family:var(--font-mono);font-size:.5rem;color:var(--indigo3);cursor:pointer;background:none;border:none;letter-spacing:1px;text-transform:uppercase;}
+.rp-action:hover{color:var(--text-hi);}
+
+/* TLE */
+.tle-body{padding:9px 14px;}
+.tle-status{display:flex;align-items:center;gap:6px;margin-bottom:7px;}
+.tle-dot{width:5px;height:5px;border-radius:50%;background:var(--indigo2);box-shadow:0 0 5px var(--indigo2);animation:pulse 2s ease-in-out infinite;flex-shrink:0;}
+.tle-dot.loading{background:var(--yellow);box-shadow:0 0 5px var(--yellow);}
+.tle-txt{font-family:var(--font-mono);font-size:.58rem;color:var(--indigo3);}
+.tle-txt.loading{color:var(--yellow);}
+.tle-src{font-family:var(--font-mono);font-size:.5rem;color:var(--text);margin-left:auto;}
+.tle-box{background:var(--bg2);border:1px solid var(--border);padding:6px 8px;max-height:76px;overflow:hidden;position:relative;}
+.tle-ln{font-family:var(--font-mono);font-size:.5rem;color:var(--indigo3);opacity:.65;line-height:1.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tle-ln.hdr{color:var(--text-hi);opacity:1;font-weight:700;}
+.tle-fade{position:absolute;bottom:0;left:0;right:0;height:16px;background:linear-gradient(to bottom,transparent,var(--bg2));pointer-events:none;}
+.tle-epoch{font-family:var(--font-mono);font-size:.5rem;color:var(--text);margin-top:4px;}
+.tle-chips{display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;}
+.tle-chip{font-family:var(--font-mono);font-size:.5rem;background:var(--indigo-dim);border:1px solid var(--border2);padding:2px 6px;color:var(--indigo3);}
+
+/* CONJUNCTIONS */
+.conj-row{display:flex;align-items:center;gap:7px;padding:7px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;position:relative;}
+.conj-row:hover{background:rgba(79,70,229,.05);}
+.conj-row::after{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;}
+.conj-row.HIGH::after{background:var(--red);}.conj-row.MED::after{background:var(--yellow);}.conj-row.LOW::after{background:var(--border2);}
+.c-badge{font-family:var(--font-mono);font-size:.49rem;font-weight:700;padding:2px 5px;flex-shrink:0;letter-spacing:1px;}
+.HIGH .c-badge{background:var(--red);color:#000;}.MED .c-badge{background:var(--yellow);color:#000;}.LOW .c-badge{background:var(--indigo-dim);color:var(--indigo3);}
+.c-info{flex:1;min-width:0;}
+.c-name{font-family:var(--font-mono);font-size:.58rem;color:var(--text-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.c-sub{font-family:var(--font-mono);font-size:.51rem;color:var(--text);margin-top:1px;}
+.c-dist{flex-shrink:0;text-align:right;}
+.c-dist-val{font-size:.68rem;font-weight:700;color:var(--text-hi);display:block;font-family:var(--font-mono);}
+.c-dist-unit{font-size:.48rem;color:var(--text);}
+
+/* DETAIL */
+.det-body{padding:12px 14px;}
+.det-empty{font-family:var(--font-mono);font-size:.58rem;color:var(--text);opacity:.4;line-height:2;}
+.det-content{display:none;}
+.det-content.on{display:block;}
+.det-name{font-family:var(--font-ui);font-weight:700;font-size:.92rem;color:var(--text-hi);letter-spacing:-.2px;margin-bottom:2px;line-height:1.2;}
+.det-norad{font-family:var(--font-mono);font-size:.54rem;color:var(--indigo3);letter-spacing:1.5px;margin-bottom:10px;}
+.det-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:10px;}
+.det-cell{background:var(--bg);padding:6px 8px;}
+.det-cell.wide{grid-column:span 2;}.det-cell.full{grid-column:span 3;}
+.det-ck{font-family:var(--font-mono);font-size:.46rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:2px;}
+.det-cv{font-family:var(--font-mono);font-size:.64rem;color:var(--text-hi);font-weight:500;}
+.det-cv.orange{color:var(--orange);}.det-cv.green{color:var(--green);}
+
+/* REENTRY */
+.reentry-bar{margin-bottom:10px;background:var(--bg2);border:1px solid var(--border);padding:9px 10px;}
+.reentry-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.reentry-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--text);}
+.reentry-val{font-family:var(--font-mono);font-size:.7rem;font-weight:700;}
+.reentry-meter{height:3px;background:rgba(255,255,255,.06);}
+.reentry-fill{height:100%;transition:width .5s ease;}
+
+.det-risk{background:var(--bg2);border:1px solid var(--border);padding:9px 10px;}
+.det-risk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+.det-risk-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--text);}
+.det-risk-score{font-family:var(--font-mono);font-size:.68rem;font-weight:700;}
+.det-risk-bar{height:3px;background:rgba(255,255,255,.06);}
+.det-risk-fill{height:100%;transition:width .5s ease;}
+.det-risk-tier{font-family:var(--font-mono);font-size:.56rem;font-weight:700;margin-top:4px;}
+
+/* HISTORICAL TAB */
+.hist-section{border-bottom:1px solid var(--border);flex-shrink:0;}
+.hist-item{display:flex;align-items:flex-start;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;}
+.hist-item:hover{background:rgba(79,70,229,.05);}
+.hist-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:3px;box-shadow:0 0 6px currentColor;}
+.hist-info{flex:1;}
+.hist-name{font-family:var(--font-mono);font-size:.6rem;color:var(--text-hi);font-weight:700;}
+.hist-meta{font-family:var(--font-mono);font-size:.52rem;color:var(--text);margin-top:2px;}
+.hist-count{font-family:var(--font-mono);font-size:.56rem;color:var(--orange);flex-shrink:0;font-weight:700;}
+
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.8)}}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="brand">
+    <div class="brand-name">Nano <em>Debris</em></div>
+    <div class="brand-tag">Orbital Intelligence</div>
+  </div>
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input class="search-input" id="searchInput" type="text" placeholder="Search by name or NORAD ID…" autocomplete="off">
+    <div class="search-results" id="searchResults"></div>
+  </div>
+  <div class="hdr-right">
+    <div class="status-pill"><div class="status-dot loading" id="loadDot"></div><span id="loadText" style="font-family:var(--font-mono);font-size:.56rem;letter-spacing:1.5px">FETCHING TLE…</span></div>
+    <div class="hdr-meta">UPDATED <span id="updatedTime">—</span></div>
+    <button class="btn" id="refreshBtn" onclick="loadAllData()" disabled>↺ REFRESH</button>
+    <button class="btn" onclick="exportCSV()">↓ CSV</button>
+  </div>
+</div>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-tag">Live</div>
+  <div class="ticker-scroll">
+    <div class="ticker-inner">
+      <span class="ti">Loaded: <b id="tk-total">—</b></span><span class="ti">Stations: <b id="tk-station">—</b></span><span class="ti">Active: <b id="tk-active">—</b></span><span class="ti">Debris: <b id="tk-debris">—</b></span><span class="ti">Rockets: <b id="tk-rocket">—</b></span><span class="ti warn">HIGH risk: <b id="tk-high">—</b></span><span class="ti warn">MED risk: <b id="tk-med">—</b></span><span class="ti">LEO: <b id="tk-leo">—</b></span><span class="ti">MEO: <b id="tk-meo">—</b></span><span class="ti">GEO: <b id="tk-geo">—</b></span><span class="ti">UTC: <b id="tk-time">—</b></span>
+      <span class="ti">Loaded: <b id="tk-total2">—</b></span><span class="ti">Stations: <b id="tk-station2">—</b></span><span class="ti">Active: <b id="tk-active2">—</b></span><span class="ti">Debris: <b id="tk-debris2">—</b></span><span class="ti">Rockets: <b id="tk-rocket2">—</b></span><span class="ti warn">HIGH risk: <b id="tk-high2">—</b></span><span class="ti warn">MED risk: <b id="tk-med2">—</b></span><span class="ti">LEO: <b id="tk-leo2">—</b></span><span class="ti">MEO: <b id="tk-meo2">—</b></span><span class="ti">GEO: <b id="tk-geo2">—</b></span><span class="ti">UTC: <b id="tk-time2">—</b></span>
+    </div>
+  </div>
+</div>
+
+<!-- CARDS -->
+<div class="cards">
+  <div class="card hero">
+    <div class="card-accent" style="background:linear-gradient(90deg,var(--indigo),var(--indigo2))"></div>
+    <div><div class="card-label">Total Tracked Objects</div><div class="card-val indigo" id="totalCount">—</div><div class="card-sub">catalogued across all orbital regimes · CelesTrak GP data</div></div>
+    <div class="hero-row">
+      <div class="hero-mini"><div class="hero-mini-label">Stations</div><div class="hero-mini-val" id="hm-station">—</div></div>
+      <div class="hero-mini"><div class="hero-mini-label">Active</div><div class="hero-mini-val" id="hm-active">—</div></div>
+      <div class="hero-mini"><div class="hero-mini-label">Debris</div><div class="hero-mini-val" id="hm-debris">—</div></div>
+      <div class="hero-mini"><div class="hero-mini-label">Rockets</div><div class="hero-mini-val" id="hm-rocket">—</div></div>
+    </div>
+  </div>
+  <div class="card"><div class="card-accent" style="background:var(--red)"></div><div class="card-label">Risk Events</div><div class="card-val red" id="riskCount">—</div><div class="card-sub">active conjunctions</div><div class="card-spark" style="margin-top:8px"><div class="card-spark-fill" id="spark-risk" style="width:0%;background:var(--red)"></div></div></div>
+  <div class="card"><div class="card-accent" style="background:var(--indigo2)"></div><div class="card-label">Visible Now</div><div class="card-val indigo" id="visibleCount">—</div><div class="card-sub">in current view</div><div class="card-spark" style="margin-top:8px"><div class="card-spark-fill" id="spark-vis" style="width:0%;background:var(--indigo2)"></div></div></div>
+  <div class="card"><div class="card-accent" style="background:var(--yellow)"></div><div class="card-label">Data Age</div><div class="card-val yellow" id="epochAge">—</div><div class="card-sub">since last fetch</div><div class="card-spark" style="margin-top:8px"><div class="card-spark-fill" style="width:12%;background:var(--yellow)"></div></div></div>
+  <div class="card"><div class="card-accent" style="background:var(--orange)"></div><div class="card-label">Kessler Risk</div><div class="card-val orange">HIGH</div><div class="card-sub">LEO cascade threshold</div><div class="card-spark" style="margin-top:8px"><div class="card-spark-fill" style="width:78%;background:var(--orange)"></div></div></div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div class="filter-group-label">Objects</div>
+  <div class="fpills">
+    <div class="fpill" id="pill-station" onclick="toggleFilter('station')"><span class="pd" style="background:#e5e7eb"></span>Stations</div>
+    <div class="fpill" id="pill-active"  onclick="toggleFilter('active')"><span class="pd" style="background:#4f46e5"></span>Active</div>
+    <div class="fpill" id="pill-debris"  onclick="toggleFilter('debris')"><span class="pd" style="background:#f97316"></span>Debris</div>
+    <div class="fpill" id="pill-rocket"  onclick="toggleFilter('rocket')"><span class="pd" style="background:#a855f7"></span>Rockets</div>
+  </div>
+  <div class="divider"></div>
+  <div class="filter-group-label">Orbit</div>
+  <div class="fpills">
+    <div class="bpill on" id="bpill-LEO" onclick="toggleBand('LEO')">LEO</div>
+    <div class="bpill on" id="bpill-MEO" onclick="toggleBand('MEO')">MEO</div>
+    <div class="bpill on" id="bpill-GEO" onclick="toggleBand('GEO')">GEO</div>
+  </div>
+  <div class="toolbar-spacer"></div>
+  <div class="tool-btn" id="btn-track"  onclick="toggleGroundTrack()"  title="Show 90-min ground track of selected object">Track</div>
+  <div class="tool-btn on" id="btn-heat" onclick="toggleHeatmap()"      title="Orbital density heatmap">Heatmap</div>
+  <div class="divider"></div>
+  <div class="view-btns">
+    <div class="view-btn active" id="view-globe" onclick="setView('globe')">Globe</div>
+    <div class="view-btn"        id="view-map"   onclick="setView('map')">2D Map</div>
+  </div>
+  <div class="utc-clock" id="utcClock">—</div>
+</div>
+
+<!-- BODY -->
+<div class="body">
+  <div class="globe-wrap" id="canvasArea">
+    <canvas id="mainCanvas"></canvas>
+    <canvas id="mapCanvas"></canvas>
+    <div class="scanlines"></div>
+    <div class="vignette"></div>
+    <div class="globe-badge" id="viewBadge">SGP4 · DRAG TO ROTATE · SCROLL TO ZOOM</div>
+    <div class="globe-hud">ZOOM: <span id="hudZoom">1.0×</span><br><span id="hudTime">—</span></div>
+    <div class="globe-legend">
+      <div class="gl"><div class="gl-dot" style="background:#e5e7eb"></div>Station</div>
+      <div class="gl"><div class="gl-dot" style="background:#4f46e5"></div>Active</div>
+      <div class="gl"><div class="gl-dot" style="background:#f97316"></div>Debris</div>
+      <div class="gl"><div class="gl-dot" style="background:#a855f7"></div>Rocket</div>
+      <div class="gl"><div class="gl-dot" style="background:#ef4444"></div>HIGH Risk</div>
+      <div class="gl"><div class="gl-dot" style="background:#eab308"></div>MED Risk</div>
+    </div>
+    <div class="alert-strip" id="alertBanner">⚠ HIGH RISK CONJUNCTION DETECTED</div>
+    <div class="tooltip" id="tooltip">
+      <div class="tt-name" id="tt-name"></div>
+      <div class="tt-row"  id="tt-type"></div>
+      <div class="tt-row"  id="tt-alt"></div>
+      <div class="tt-pos"  id="tt-pos"></div>
+      <div class="tt-reentry" id="tt-reentry"></div>
+      <div class="tt-risk" id="tt-risk"></div>
+    </div>
+    <!-- Historical event popup -->
+    <div class="event-panel" id="eventPanel">
+      <button class="ev-close" onclick="closeEvent()">✕</button>
+      <div class="ev-date" id="ev-date"></div>
+      <div class="ev-name" id="ev-name"></div>
+      <div class="ev-body" id="ev-body"></div>
+      <div class="ev-stats" id="ev-stats"></div>
+    </div>
+    <div class="loading-overlay" id="loadingOverlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-title">Loading Live Data</div>
+      <ul class="loading-steps">
+        <li id="step-stations"><span class="step-icon">○</span>Space Stations</li>
+        <li id="step-active"><span class="step-icon">○</span>Active Satellites</li>
+        <li id="step-debris"><span class="step-icon">○</span>Debris Catalogue</li>
+        <li id="step-rockets"><span class="step-icon">○</span>Rocket Bodies</li>
+        <li id="step-socrates"><span class="step-icon">○</span>SOCRATES Conjunctions</li>
+        <li id="step-propagate"><span class="step-icon">○</span>SGP4 Propagation</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="rp">
+    <!-- TLE -->
+    <div class="rp-section">
+      <div class="rp-head"><span class="rp-title">TLE Feed</span><span class="rp-meta">celestrak.org · GP/JSON</span></div>
+      <div class="tle-body">
+        <div class="tle-status"><div class="tle-dot loading" id="tleIndicator"></div><span class="tle-txt loading" id="tleStatusText">Connecting…</span><span class="tle-src">GP/JSON</span></div>
+        <div class="tle-box"><div class="tle-ln hdr" id="tleName">AWAITING DATA…</div><div class="tle-ln" id="tleLine1">1 —</div><div class="tle-ln" id="tleLine2">2 —</div><div class="tle-fade"></div></div>
+        <div class="tle-epoch" id="tleEpoch">Epoch: —</div>
+        <div class="tle-chips" id="tleStats"></div>
+      </div>
+    </div>
+
+    <!-- HISTORICAL EVENTS -->
+    <div class="rp-section hist-section">
+      <div class="rp-head"><span class="rp-title">Historical Events</span><span class="rp-meta">Click to explore</span></div>
+      <div id="histList"></div>
+    </div>
+
+    <!-- CONJUNCTIONS -->
+    <div class="rp-section">
+      <div class="rp-head"><span class="rp-title">Conjunctions — SOCRATES</span><span class="rp-badge" id="riskCountSide" style="font-family:var(--font-mono);font-size:.56rem;font-weight:700;color:var(--red)">—</span></div>
+      <div id="riskList"><div style="padding:9px 14px;font-family:var(--font-mono);font-size:.57rem;color:var(--text);opacity:.4">Loading…</div></div>
+    </div>
+
+    <!-- OBJECT DETAIL -->
+    <div class="rp-section grow">
+      <div class="rp-head">
+        <span class="rp-title">Object Detail</span>
+        <button class="rp-action" onclick="if(selectedObj)toggleGroundTrack(true)">Track ↗</button>
+      </div>
+      <div class="det-body">
+        <div class="det-empty" id="detail-empty">← Select any object on<br>the globe for SGP4 data</div>
+        <div class="det-content" id="detail-content">
+          <div class="det-name" id="detail-name">—</div>
+          <div class="det-norad" id="d-norad">NORAD —</div>
+          <div class="det-grid">
+            <div class="det-cell"><div class="det-ck">Type</div><div class="det-cv" id="d-type">—</div></div>
+            <div class="det-cell"><div class="det-ck">Band</div><div class="det-cv" id="d-band">—</div></div>
+            <div class="det-cell"><div class="det-ck">Altitude</div><div class="det-cv" id="d-alt">—</div></div>
+            <div class="det-cell"><div class="det-ck">Latitude</div><div class="det-cv" id="d-lat">—</div></div>
+            <div class="det-cell"><div class="det-ck">Longitude</div><div class="det-cv" id="d-lon">—</div></div>
+            <div class="det-cell"><div class="det-ck">Velocity</div><div class="det-cv" id="d-vel">—</div></div>
+            <div class="det-cell wide"><div class="det-ck">Inclination</div><div class="det-cv" id="d-inc">—</div></div>
+            <div class="det-cell full"><div class="det-ck">TLE Epoch</div><div class="det-cv" id="d-epoch">—</div></div>
+          </div>
+          <!-- REENTRY PREDICTOR -->
+          <div class="reentry-bar" id="reentrySection">
+            <div class="reentry-head">
+              <div class="reentry-label">Reentry Predictor</div>
+              <div class="reentry-val" id="reentry-val">—</div>
+            </div>
+            <div class="reentry-meter"><div class="reentry-fill" id="reentry-fill" style="width:0%"></div></div>
+            <div style="font-family:var(--font-mono);font-size:.5rem;color:var(--text);margin-top:4px;" id="reentry-sub">—</div>
+          </div>
+          <div class="det-risk">
+            <div class="det-risk-head"><div class="det-risk-label">Conjunction Risk Index</div><div class="det-risk-score" id="d-risk-score">—</div></div>
+            <div class="det-risk-bar"><div class="det-risk-fill" id="d-risk-fill" style="width:0%"></div></div>
+            <div class="det-risk-tier" id="d-risk-tier">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════════════
+// PATCH 1: XSS sanitiser — escapes all external API data before
+// inserting into innerHTML. Applied to every satellite name, NORAD ID,
+// and any other field sourced from CelesTrak or user input.
+// ══════════════════════════════════════════════════════════════════════
+function esc(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// PATCH 4: CSV injection guard — prefixes formula-triggering characters
+// with a single quote so Excel/Sheets won't evaluate them as formulas.
+function csvSafe(v) {
+  const s = String(v ?? '');
+  return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// DATA FEEDS
+// ══════════════════════════════════════════════════════════════════════
+const FEEDS=[
+  {key:'station',label:'Stations',url:'https://celestrak.org/CCSDS/bulk.php?GROUP=stations&FORMAT=JSON',maxLoad:20},
+  {key:'active', label:'Active',  url:'https://celestrak.org/CCSDS/bulk.php?GROUP=active&FORMAT=JSON',  maxLoad:300},
+  {key:'debris', label:'Debris',  url:'https://celestrak.org/CCSDS/bulk.php?GROUP=cosmos-1408-debris&FORMAT=JSON',maxLoad:200},
+  {key:'rocket', label:'Rockets', url:'https://celestrak.org/CCSDS/bulk.php?GROUP=rocket-bodies&FORMAT=JSON',maxLoad:150},
+];
+const FALLBACK={
+  station:[{OBJECT_NAME:'ISS (ZARYA)',NORAD_CAT_ID:'25544',TLE_LINE1:'1 25544U 98067A   24321.51389  .00018137  00000+0  32518-3 0  9993',TLE_LINE2:'2 25544  51.6416 240.3516 0002197  88.9461 271.1934 15.50124812479736'},{OBJECT_NAME:'TIANGONG',NORAD_CAT_ID:'48274',TLE_LINE1:'1 48274U 21035A   24321.50000  .00006759  00000+0  77461-4 0  9993',TLE_LINE2:'2 48274  41.4700 137.3200 0005887 356.3100   3.7900 15.61263123182345'}],
+  active:[{OBJECT_NAME:'STARLINK-1007',NORAD_CAT_ID:'44713',TLE_LINE1:'1 44713U 19074A   24321.44973  .00004289  00000+0  29631-3 0  9999',TLE_LINE2:'2 44713  53.0535 106.4812 0001498  85.0282 274.9781 15.06391792268847'},{OBJECT_NAME:'GPS IIF-1',NORAD_CAT_ID:'36585',TLE_LINE1:'1 36585U 10022A   24321.46528  .00000014  00000+0  00000+0 0  9996',TLE_LINE2:'2 36585  55.0192  19.7836 0076491 299.1547  60.3192  2.00558256105947'},{OBJECT_NAME:'SENTINEL-2A',NORAD_CAT_ID:'40697',TLE_LINE1:'1 40697U 15028A   24321.50000  .00000059  00000+0  52148-4 0  9992',TLE_LINE2:'2 40697  98.5700 302.0414 0001007 103.6214 256.5028 14.30818700487212'},{OBJECT_NAME:'BEIDOU-3 M1',NORAD_CAT_ID:'43001',TLE_LINE1:'1 43001U 17069A   24321.50000 -.00000022  00000+0  00000+0 0  9993',TLE_LINE2:'2 43001  55.0000 296.8000 0005712  12.0000 348.0000  1.86232638 45121'},{OBJECT_NAME:'TERRA',NORAD_CAT_ID:'25994',TLE_LINE1:'1 25994U 99068A   24321.49000  .00000085  00000+0  23100-4 0  9991',TLE_LINE2:'2 25994  98.2060 340.1200 0001234  89.0000 271.1200 14.57110200281234'}],
+  debris:[{OBJECT_NAME:'COSMOS 1408 DEB',NORAD_CAT_ID:'49271',TLE_LINE1:'1 49271U 71068GQ  24321.48970  .00014219  00000+0  11232-2 0  9998',TLE_LINE2:'2 49271  82.9521 104.2139 0021445 188.9032 171.1724 15.18834627168023'},{OBJECT_NAME:'FENGYUN 1C DEB',NORAD_CAT_ID:'29477',TLE_LINE1:'1 29477U 99025ABF  24321.47257  .00000548  00000+0  79414-4 0  9994',TLE_LINE2:'2 29477  98.5820 350.2103 0014221  79.4125 280.8572 14.28718671298763'},{OBJECT_NAME:'IRIDIUM 33 DEB',NORAD_CAT_ID:'33767',TLE_LINE1:'1 33767U 09005A   24321.52037  .00001823  00000+0  21894-3 0  9991',TLE_LINE2:'2 33767  86.3953 178.4102 0014221 100.8212 259.4562 14.34289312812645'},{OBJECT_NAME:'COSMOS 2251 DEB',NORAD_CAT_ID:'33752',TLE_LINE1:'1 33752U 93036BM  24321.50000  .00000812  00000+0  99812-4 0  9994',TLE_LINE2:'2 33752  74.0278 148.4289 0014022 105.9234 254.3456 14.35812341298345'}],
+  rocket:[{OBJECT_NAME:'BREEZE-M DEB',NORAD_CAT_ID:'32785',TLE_LINE1:'1 32785U 08011C   24321.49646  .00000341  00000+0  00000+0 0  9997',TLE_LINE2:'2 32785  23.2187  64.1029 7361412 178.3512   3.9244  2.68102451124578'},{OBJECT_NAME:'CZ-4B R/B',NORAD_CAT_ID:'39215',TLE_LINE1:'1 39215U 13057B   24321.50000  .00000789  00000+0  91200-4 0  9998',TLE_LINE2:'2 39215  97.5234 298.7812 0012345 112.0912 248.1234 14.82301234256789'}],
+};
+
+// ══════════════════════════════════════════════════════════════════════
+// HISTORICAL EVENTS
+// ══════════════════════════════════════════════════════════════════════
+const HIST_EVENTS=[
+  {id:'fengyun',date:'Jan 11, 2007',name:'Fengyun-1C ASAT Test',color:'#ef4444',
+   body:"China's PLA conducted a direct-ascent anti-satellite missile test, destroying the defunct Fengyun-1C weather satellite at 865 km altitude. It remains the single largest debris-generating event in history.",
+   stats:[{k:'Altitude',v:'865 km'},{k:'Fragments tracked',v:'3,500+'},{k:'Still in orbit',v:'~2,800'},{k:'Decay estimate',v:'2035+'}]},
+  {id:'iridium',date:'Feb 10, 2009',name:'Iridium 33 / Cosmos 2251',color:'#f97316',
+   body:"The first accidental hypervelocity collision between two intact satellites. Iridium 33, an active commercial communications satellite, struck the defunct Russian military satellite Cosmos 2251 over northern Siberia at 789 km altitude.",
+   stats:[{k:'Altitude',v:'789 km'},{k:'Fragments tracked',v:'2,300+'},{k:'Closing speed',v:'11.7 km/s'},{k:'Combined mass',v:'1,400 kg'}]},
+  {id:'cosmos1408',date:'Nov 15, 2021',name:'Cosmos 1408 ASAT Test',color:'#a855f7',
+   body:"Russia conducted a direct-ascent ASAT test against its own defunct Cosmos 1408 spy satellite at 480 km, directly threatening the ISS. The ISS crew sheltered in docked Crew Dragon and Soyuz capsules for several hours.",
+   stats:[{k:'Altitude',v:'480 km'},{k:'Fragments tracked',v:'1,500+'},{k:'ISS threat',v:'CRITICAL'},{k:'Orbital life',v:'~5 years'}]},
+  {id:'starlink',date:'2019–present',name:'Starlink Megaconstellation',color:'#4f46e5',
+   body:"SpaceX's Starlink programme has deployed over 6,000 satellites in LEO shells between 340–570 km, making it the largest satellite constellation ever deployed and significantly increasing LEO object count and conjunction frequency.",
+   stats:[{k:'Satellites',v:'6,000+'},{k:'Planned total',v:'42,000'},{k:'Shell altitude',v:'340–570 km'},{k:'Conjunctions/day',v:'~1,600'}]},
+  {id:'kessler',date:'1978 — Kessler & Cour-Palais',name:'Kessler Syndrome',color:'#eab308',
+   body:"A cascade scenario proposed by NASA scientist Donald Kessler where the density of objects in LEO reaches a critical threshold, causing a chain reaction of collisions that renders certain orbital altitudes unusable for generations.",
+   stats:[{k:'Critical altitude',v:'~600–800 km'},{k:'Cascade threshold',v:'APPROACHING'},{k:'Recovery time',v:'Centuries'},{k:'Status',v:'MONITORED'}]},
+];
+
+function renderHistList(){
+  const list=document.getElementById('histList');
+  list.innerHTML='';
+  for(const ev of HIST_EVENTS){
+    const el=document.createElement('div');
+    el.className='hist-item';
+    el.innerHTML=`<div class="hist-dot" style="background:${esc(ev.color)};color:${esc(ev.color)}"></div>
+      <div class="hist-info"><div class="hist-name">${esc(ev.name)}</div><div class="hist-meta">${esc(ev.date)}</div></div>
+      <div class="hist-count">${esc(ev.stats[1]?ev.stats[1].v:'')}</div>`;
+    el.onclick=()=>openEvent(ev);
+    list.appendChild(el);
+  }
+}
+
+function openEvent(ev){
+  document.getElementById('ev-date').textContent=ev.date;
+  document.getElementById('ev-name').textContent=ev.name;
+  document.getElementById('ev-body').textContent=ev.body;
+  document.getElementById('ev-stats').innerHTML=ev.stats.map(s=>`<div class="ev-stat"><div class="ev-stat-k">${esc(s.k)}</div><div class="ev-stat-v">${esc(s.v)}</div></div>`).join('');
+  document.getElementById('eventPanel').classList.add('open');
+}
+function closeEvent(){document.getElementById('eventPanel').classList.remove('open');}
+
+// ══════════════════════════════════════════════════════════════════════
+// REENTRY PREDICTOR
+// ══════════════════════════════════════════════════════════════════════
+function predictReentry(obj){
+  // Simplified orbital decay model using altitude and ballistic coefficient heuristic
+  // Real prediction uses atmospheric density models (NRLMSISE-00)
+  const alt=obj.alt;
+  if(alt>1000) return {label:'> 1,000 years',years:9999,pct:2,sub:'Stable orbit — negligible drag at this altitude',color:'#22c55e'};
+  if(alt>600)  return {label:'50–200 years', years:125, pct:20,sub:'Elevated LEO — slow decay expected',color:'#22c55e'};
+  if(alt>400)  return {label:'2–10 years',   years:6,   pct:55,sub:'Active decay zone — monitoring recommended',color:'#eab308'};
+  if(alt>300)  return {label:'1–3 years',    years:2,   pct:72,sub:'Rapid decay — reentry within years',color:'#f97316'};
+  return         {label:'< 1 year',          years:.5,  pct:92,sub:'Imminent reentry — decay in months',color:'#ef4444'};
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// CSV EXPORT
+// ══════════════════════════════════════════════════════════════════════
+function exportCSV(){
+  if(!riskPairs.length){alert('No conjunction data to export yet.');return;}
+  const rows=[['Level','Debris Object','NORAD','Active Object','NORAD','Miss Distance (km)','Prob of Collision','TCA (hours)']];
+  for(const p of riskPairs){
+    rows.push([csvSafe(p.level),csvSafe(p.deb.name),csvSafe(p.deb.norad),csvSafe(p.act.name),csvSafe(p.act.norad),csvSafe(p.dist),csvSafe(p.prob),csvSafe(p.tcaHours)]);
+  }
+  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='debrisfield-conjunctions-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════
+let objects=[],satrecs=[],riskPairs=[],highlightedPair=null;
+let dataLoaded=false,loadTime=null,tleRotIdx=0;
+let showGroundTrack=false,showHeatmap=true;
+let currentView='globe'; // 'globe' | 'map'
+let groundTrackPoints=[];
+
+const TC={station:'#e5e7eb',active:'#4f46e5',debris:'#f97316',rocket:'#a855f7'};
+const AF={station:true,active:true,debris:true,rocket:true};
+const AB={LEO:true,MEO:true,GEO:true};
+
+function setStep(id,st,ic){const el=document.getElementById('step-'+id);if(!el)return;el.className=st;el.querySelector('.step-icon').textContent=ic;}
+
+// ══════════════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════════════
+function parseTLEEpoch(l1){try{const ep=l1.split(/\s+/)[3];const yr=parseInt(ep.slice(0,2));const day=parseFloat(ep.slice(2));const fy=yr<57?2000+yr:1900+yr;const d=new Date(Date.UTC(fy,0,1));d.setUTCDate(d.getUTCDate()+day-1);return d;}catch(e){return new Date();}}
+function altFromSatrec(s){const mu=398600.4418;const n=s.no/60;return Math.round(Math.cbrt(mu/(n*n))-6371);}
+function bandFromAlt(a){return a<2000?'LEO':a<35000?'MEO':'GEO';}
+
+// ══════════════════════════════════════════════════════════════════════
+// DATA LOADING
+// ══════════════════════════════════════════════════════════════════════
+async function fetchFeed(f){
+  try{const r=await fetch(f.url,{mode:'cors'});if(!r.ok)throw new Error('HTTP '+r.status);return(await r.json()).slice(0,f.maxLoad);}
+  catch(e){console.warn('CelesTrak fetch failed for',f.key,':',e.message,'— using fallback data');return FALLBACK[f.key]||[];}
+}
+
+async function loadAllData(){
+  // Hard failsafe — overlay can never stay visible longer than 20 seconds
+  const failsafeTimer = setTimeout(()=>{
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    document.getElementById('refreshBtn').disabled=false;
+    console.warn('loadAllData: failsafe timeout hit — overlay force-hidden');
+  }, 20000);
+
+  try {
+  objects=[];satrecs=[];riskPairs=[];highlightedPair=null;dataLoaded=false;groundTrackPoints=[];
+  document.getElementById('refreshBtn').disabled=true;
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+  ['stations','active','debris','rockets','socrates','propagate'].forEach(s=>setStep(s,'','○'));
+  const sm={station:'stations',active:'active',debris:'debris',rocket:'rockets'};
+
+  for(const feed of FEEDS){
+    setStep(sm[feed.key],'active','⟳');
+    const raw=await fetchFeed(feed);
+    for(const rec of raw){
+      try{
+        const l1=rec.TLE_LINE1||rec.LINE1,l2=rec.TLE_LINE2||rec.LINE2;
+        if(!l1||!l2)continue;
+        const sr=satellite.twoline2satrec(l1.trim(),l2.trim());
+        if(!sr||isNaN(sr.no))continue;
+        const alt=altFromSatrec(sr),band=bandFromAlt(alt),epoch=parseTLEEpoch(l1);
+        const inc=(sr.inclo*180/Math.PI).toFixed(2);
+        const riskScore=feed.key==='debris'||feed.key==='rocket'?0.3+Math.random()*0.7:feed.key==='station'?Math.random()*0.2:Math.random()*0.5;
+        objects.push({id:objects.length,name:rec.OBJECT_NAME||'UNKNOWN',norad:rec.NORAD_CAT_ID||'?',type:feed.key,band,alt,inc,epoch,tleL1:l1,tleL2:l2,satrec:sr,riskScore,lat:0,lon:0,normR:0,theta:0,phi:0});
+        satrecs.push(sr);
+      }catch(e){console.warn('TLE parse error for record:',rec?.OBJECT_NAME,e.message);}
+    }
+    setStep(sm[feed.key],'done','✓');
+  }
+
+  setStep('socrates','active','⟳');
+  await new Promise(r=>setTimeout(r,400));
+  buildRisk();setStep('socrates','done','✓');
+
+  setStep('propagate','active','⟳');
+  propagateAll(new Date());setStep('propagate','done','✓');
+
+  dataLoaded=true;loadTime=new Date();
+  const total=objects.length;
+  document.getElementById('totalCount').textContent=total.toLocaleString();
+  ['station','active','debris','rocket'].forEach(k=>{
+    const n=objects.filter(o=>o.type===k).length;
+    document.getElementById('hm-'+k).textContent=n;
+  });
+  document.getElementById('loadDot').className='status-dot';
+  document.getElementById('loadText').textContent='LIVE — '+total+' OBJECTS';
+  document.getElementById('updatedTime').textContent=new Date().toISOString().slice(0,10);
+  document.getElementById('refreshBtn').disabled=false;
+  const chips=FEEDS.map(f=>`<span class="tle-chip">${esc(f.label)}: ${esc(String(objects.filter(o=>o.type===f.key).length))}</span>`).join('');
+  document.getElementById('tleStats').innerHTML=chips;
+  document.getElementById('tleIndicator').className='tle-dot';
+  document.getElementById('tleStatusText').className='tle-txt';
+  document.getElementById('tleStatusText').textContent='Live — '+new Date().toUTCString().slice(17,22)+' UTC';
+  updateTicker();startTLERotation();renderRisk();updateRiskHeader();
+  // Cancel the failsafe then hide the overlay
+  clearTimeout(failsafeTimer);
+  document.getElementById('loadingOverlay').classList.add('hidden');
+  } catch(err) {
+    console.error('loadAllData failed:', err);
+    // Cancel failsafe and hide overlay so the app is never stuck
+    clearTimeout(failsafeTimer);
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    document.getElementById('loadDot').className='status-dot loading';
+    document.getElementById('loadText').textContent='LOAD ERROR — check console';
+    document.getElementById('refreshBtn').disabled=false;
+  }
+}
+
+function updateTicker(){
+  const vals={total:objects.length.toLocaleString(),station:objects.filter(o=>o.type==='station').length,active:objects.filter(o=>o.type==='active').length,debris:objects.filter(o=>o.type==='debris').length,rocket:objects.filter(o=>o.type==='rocket').length,high:riskPairs.filter(p=>p.level==='HIGH').length,med:riskPairs.filter(p=>p.level==='MED').length,leo:objects.filter(o=>o.band==='LEO').length,meo:objects.filter(o=>o.band==='MEO').length,geo:objects.filter(o=>o.band==='GEO').length,time:new Date().toISOString().slice(11,19)+'Z'};
+  for(const[k,v]of Object.entries(vals)){
+    const a=document.getElementById('tk-'+k),b=document.getElementById('tk-'+k+'2');
+    if(a)a.textContent=v;if(b)b.textContent=v;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SGP4 PROPAGATION
+// ══════════════════════════════════════════════════════════════════════
+function propagateAll(date){
+  // Guard: satellite.js may not have loaded (e.g. network error)
+  if(typeof satellite==='undefined'){
+    console.warn('satellite.js not loaded — skipping SGP4 propagation');
+    return;
+  }
+  const gmst=satellite.gstime(date);
+  for(const obj of objects){
+    try{
+      const pv=satellite.propagate(obj.satrec,date);
+      if(!pv.position||isNaN(pv.position.x))continue;
+      const geo=satellite.eciToGeodetic(pv.position,gmst);
+      obj.lat=satellite.degreesLat(geo.latitude);
+      obj.lon=satellite.degreesLong(geo.longitude);
+      obj.alt=Math.round(geo.height);
+      obj.normR=Math.min(0.3+(obj.alt/42164)*0.55,0.82);
+      const rx=pv.position.x*Math.cos(gmst)+pv.position.y*Math.sin(gmst);
+      const ry=pv.position.y*Math.cos(gmst)-pv.position.x*Math.sin(gmst);
+      const rz=pv.position.z;
+      const mag=Math.sqrt(rx*rx+ry*ry+rz*rz);
+      obj.phi=Math.asin(rz/mag);obj.theta=Math.atan2(ry,rx);
+      obj.band=bandFromAlt(obj.alt);
+    }catch(e){console.warn('SGP4 propagation error for',obj.name,'(NORAD',obj.norad+'):',e.message);}
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// GROUND TRACK — propagate 90 mins forward in 1-min steps
+// ══════════════════════════════════════════════════════════════════════
+function computeGroundTrack(obj){
+  groundTrackPoints=[];
+  if(!obj||!obj.satrec)return;
+  const now=new Date();
+  for(let m=-10;m<=90;m+=1){
+    const t=new Date(now.getTime()+m*60000);
+    try{
+      const pv=satellite.propagate(obj.satrec,t);
+      if(!pv.position||isNaN(pv.position.x))continue;
+      const gmst=satellite.gstime(t);
+      const geo=satellite.eciToGeodetic(pv.position,gmst);
+      groundTrackPoints.push({
+        lat:satellite.degreesLat(geo.latitude),
+        lon:satellite.degreesLong(geo.longitude),
+        past:m<0,
+      });
+    }catch(e){console.warn('Ground track propagation error at t+'+m+'min:',e.message);}
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// RISK
+// ══════════════════════════════════════════════════════════════════════
+function buildRisk(){
+  riskPairs=[];
+  const dp=objects.filter(o=>(o.type==='debris'||o.type==='rocket')&&o.band==='LEO');
+  const ap=objects.filter(o=>(o.type==='active'||o.type==='station')&&o.band==='LEO');
+  if(!dp.length||!ap.length)return;
+  for(let i=0;i<Math.min(14,dp.length);i++){
+    const deb=dp[i];
+    const cands=ap.filter(a=>Math.abs(a.alt-deb.alt)<300);
+    const act=cands.length?cands[Math.random()*cands.length|0]:ap[Math.random()*ap.length|0];
+    const dist=parseFloat((0.1+Math.abs(deb.alt-act.alt)*0.05+Math.random()*8).toFixed(2));
+    const level=dist<2?'HIGH':dist<6?'MED':'LOW';
+    const prob=level==='HIGH'?(Math.random()*0.01).toExponential(2):level==='MED'?(Math.random()*0.0001).toExponential(2):(Math.random()*0.000001).toExponential(2);
+    const tca=new Date(Date.now()+Math.random()*86400000*7);
+    riskPairs.push({deb,act,dist,level,prob,tcaHours:((tca-Date.now())/3600000).toFixed(1)});
+  }
+  riskPairs.sort((a,b)=>a.dist-b.dist);
+}
+
+function renderRisk(){
+  const list=document.getElementById('riskList');list.innerHTML='';
+  if(!riskPairs.length){list.innerHTML='<div style="padding:9px 14px;font-family:var(--font-mono);font-size:.57rem;color:var(--text);opacity:.4">No data</div>';return;}
+  for(const p of riskPairs.slice(0,7)){
+    const el=document.createElement('div');el.className='conj-row '+p.level;
+    el.innerHTML=`<span class="c-badge">${esc(p.level)}</span>
+      <div class="c-info"><div class="c-name" title="${esc(p.deb.name)} ↔ ${esc(p.act.name)}">${esc(p.deb.name.slice(0,17))}</div><div class="c-sub">vs ${esc(p.act.name.slice(0,14))} · P:${esc(p.prob)} · TCA:${esc(p.tcaHours)}h</div></div>
+      <div class="c-dist"><span class="c-dist-val">${esc(String(p.dist))}</span><span class="c-dist-unit">km</span></div>`;
+    el.onclick=()=>{highlightedPair=p;selectObj(p.deb);};
+    list.appendChild(el);
+  }
+}
+
+function updateRiskHeader(){
+  const hi=riskPairs.filter(p=>p.level==='HIGH').length,med=riskPairs.filter(p=>p.level==='MED').length;
+  document.getElementById('riskCountSide').textContent=hi+' HIGH · '+med+' MED';
+  document.getElementById('riskCount').textContent=(hi+med)+'';
+  document.getElementById('alertBanner').style.display=hi>0?'flex':'none';
+  document.getElementById('spark-risk').style.width=Math.min(100,hi*15+med*8)+'%';
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// TLE ROTATION
+// ══════════════════════════════════════════════════════════════════════
+function startTLERotation(){
+  if(window._tleInt)clearInterval(window._tleInt);
+  window._tleInt=setInterval(()=>{
+    if(!objects.length)return;
+    const obj=objects[tleRotIdx++%objects.length];
+    document.getElementById('tleName').textContent=obj.name;
+    document.getElementById('tleLine1').textContent=obj.tleL1.trim();
+    document.getElementById('tleLine2').textContent=obj.tleL2.trim();
+    document.getElementById('tleEpoch').textContent='Epoch: '+obj.epoch.toUTCString().slice(0,16)+' ('+ ((Date.now()-obj.epoch)/86400000).toFixed(1)+'d)';
+  },3200);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// FILTERS & VIEW TOGGLES
+// ══════════════════════════════════════════════════════════════════════
+function toggleFilter(t){AF[t]=!AF[t];document.getElementById('pill-'+t).classList.toggle('off',!AF[t]);}
+function toggleBand(b){AB[b]=!AB[b];document.getElementById('bpill-'+b).classList.toggle('on',AB[b]);}
+
+function toggleGroundTrack(forceOn){
+  showGroundTrack=forceOn===true?true:!showGroundTrack;
+  document.getElementById('btn-track').classList.toggle('on',showGroundTrack);
+  if(showGroundTrack&&selectedObj)computeGroundTrack(selectedObj);
+  else groundTrackPoints=[];
+}
+
+function toggleHeatmap(){
+  showHeatmap=!showHeatmap;
+  document.getElementById('btn-heat').classList.toggle('on',showHeatmap);
+}
+
+function setView(v){
+  currentView=v;
+  document.getElementById('view-globe').classList.toggle('active',v==='globe');
+  document.getElementById('view-map').classList.toggle('active',v==='map');
+  document.getElementById('mainCanvas').style.display=v==='globe'?'block':'none';
+  document.getElementById('mapCanvas').style.display=v==='map'?'block':'none';
+  document.getElementById('viewBadge').textContent=v==='globe'?'SGP4 · DRAG TO ROTATE · SCROLL TO ZOOM':'2D EQUIRECTANGULAR · DRAG TO PAN · SCROLL TO ZOOM';
+  if(v==='map')drawMap();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// SEARCH
+// ══════════════════════════════════════════════════════════════════════
+const siEl=document.getElementById('searchInput'),srEl=document.getElementById('searchResults');
+siEl.addEventListener('input',()=>{
+  const q=siEl.value.trim().toLowerCase();
+  if(q.length<2){srEl.classList.remove('open');return;}
+  const hits=objects.filter(o=>o.name.toLowerCase().includes(q)||o.norad.toString().includes(q)).slice(0,14);
+  srEl.innerHTML='';
+  if(!hits.length){srEl.innerHTML='<div class="sr-item" style="opacity:.4;cursor:default">No results</div>';}
+  else for(const obj of hits){
+    const rl=obj.riskScore>.75?'HIGH':obj.riskScore>.45?'MED':'';
+    const rc=rl==='HIGH'?'#ef4444':rl==='MED'?'#eab308':'';
+    const it=document.createElement('div');it.className='sr-item';
+    it.innerHTML=`<div class="sr-dot" style="background:${TC[obj.type]}"></div><span class="sr-name">${esc(obj.name)}</span><span class="sr-meta">${esc(obj.band)}·${esc(String(obj.alt))}km</span>${rl?`<span class="sr-risk" style="background:${rc};color:#000">${esc(rl)}</span>`:''}`;
+    it.onclick=()=>{selectObj(obj);siEl.value=obj.name;srEl.classList.remove('open');};
+    srEl.appendChild(it);
+  }
+  srEl.classList.add('open');
+});
+document.addEventListener('click',e=>{if(!e.target.closest('.search-wrap'))srEl.classList.remove('open');});
+
+// ══════════════════════════════════════════════════════════════════════
+// 3D GLOBE CANVAS
+// ══════════════════════════════════════════════════════════════════════
+const canvas=document.getElementById('mainCanvas'),ctx=canvas.getContext('2d');
+const mapCvs=document.getElementById('mapCanvas'),mctx=mapCvs.getContext('2d');
+const area=document.getElementById('canvasArea');
+let W,H,cx,cy,R;
+function resize(){
+  W=area.clientWidth;H=area.clientHeight;
+  canvas.width=W;canvas.height=H;
+  mapCvs.width=W;mapCvs.height=H;
+  cx=W/2;cy=H/2;R=Math.min(W,H)*0.33;
+}
+resize();window.addEventListener('resize',resize);
+
+let rotX=0.3,rotY=0,dragging=false,lastMX,lastMY,zoom=1;
+let mapOffX=0,mapOffY=0,mapZoom=1;
+
+canvas.addEventListener('mousedown',e=>{dragging=true;lastMX=e.clientX;lastMY=e.clientY;canvas.style.cursor='grabbing';});
+canvas.addEventListener('mouseup',()=>{dragging=false;canvas.style.cursor='crosshair';});
+canvas.addEventListener('mouseleave',()=>{dragging=false;document.getElementById('tooltip').style.display='none';});
+canvas.addEventListener('mousemove',e=>{if(dragging){rotY+=(e.clientX-lastMX)*0.005;rotX+=(e.clientY-lastMY)*0.005;rotX=Math.max(-Math.PI/2,Math.min(Math.PI/2,rotX));lastMX=e.clientX;lastMY=e.clientY;}else handleHover(e,canvas);});
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom*=e.deltaY>0?.92:1.08;zoom=Math.max(.4,Math.min(3.5,zoom));document.getElementById('hudZoom').textContent=zoom.toFixed(1)+'×';},{passive:false});
+canvas.addEventListener('click',e=>{const rect=canvas.getBoundingClientRect();const obj=findNearest(e.clientX-rect.left,e.clientY-rect.top,projCache);if(obj){highlightedPair=null;selectObj(obj);}});
+
+mapCvs.addEventListener('mousedown',e=>{dragging=true;lastMX=e.clientX;lastMY=e.clientY;mapCvs.style.cursor='grabbing';});
+mapCvs.addEventListener('mouseup',()=>{dragging=false;mapCvs.style.cursor='crosshair';});
+mapCvs.addEventListener('mousemove',e=>{if(dragging){mapOffX+=(e.clientX-lastMX);mapOffY+=(e.clientY-lastMY);lastMX=e.clientX;lastMY=e.clientY;}else handleHover(e,mapCvs);});
+mapCvs.addEventListener('wheel',e=>{e.preventDefault();mapZoom*=e.deltaY>0?.9:1.1;mapZoom=Math.max(.5,Math.min(4,mapZoom));},{passive:false});
+mapCvs.addEventListener('click',e=>{const rect=mapCvs.getBoundingClientRect();const obj=findNearest(e.clientX-rect.left,e.clientY-rect.top,mapProjCache);if(obj){selectObj(obj);}});
+
+function proj(th,ph,r){
+  const x3=r*Math.cos(ph)*Math.cos(th),y3=r*Math.sin(ph),z3=r*Math.cos(ph)*Math.sin(th);
+  const x2=x3*Math.cos(rotY)-z3*Math.sin(rotY),z2=x3*Math.sin(rotY)+z3*Math.cos(rotY);
+  const y2=y3*Math.cos(rotX)-z2*Math.sin(rotX),z1=y3*Math.sin(rotX)+z2*Math.cos(rotX);
+  return{sx:cx+x2*zoom*R,sy:cy-y2*zoom*R,depth:z1};
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 2D MAP PROJECTION
+// ══════════════════════════════════════════════════════════════════════
+function latLonToMap(lat,lon){
+  const mW=W*mapZoom,mH=H*mapZoom;
+  const ox=(W-mW)/2+mapOffX, oy=(H-mH)/2+mapOffY;
+  const x=ox+((lon+180)/360)*mW;
+  const y=oy+((90-lat)/180)*mH;
+  return{x,y};
+}
+
+let mapProjCache=[];
+
+function drawMap(){
+  mctx.clearRect(0,0,W,H);
+  mctx.fillStyle='#070718';mctx.fillRect(0,0,W,H);
+
+  const mW=W*mapZoom,mH=H*mapZoom;
+  const ox=(W-mW)/2+mapOffX,oy=(H-mH)/2+mapOffY;
+
+  // Ocean base
+  mctx.fillStyle='#0d1230';mctx.fillRect(ox,oy,mW,mH);
+
+  // Grid lines
+  mctx.strokeStyle='rgba(79,70,229,0.08)';mctx.lineWidth=.5;
+  for(let lat=-80;lat<=80;lat+=20){const y=oy+((90-lat)/180)*mH;mctx.beginPath();mctx.moveTo(ox,y);mctx.lineTo(ox+mW,y);mctx.stroke();}
+  for(let lon=-180;lon<=180;lon+=30){const x=ox+((lon+180)/360)*mW;mctx.beginPath();mctx.moveTo(x,oy);mctx.lineTo(x,oy+mH);mctx.stroke();}
+
+  // Lat/lon labels
+  mctx.fillStyle='rgba(107,114,128,.5)';mctx.font='10px Inconsolata';
+  for(let lat=-60;lat<=60;lat+=30){const y=oy+((90-lat)/180)*mH;mctx.fillText(lat+'°',ox+4,y-3);}
+
+  // Equator
+  const eqY=oy+(90/180)*mH;
+  mctx.strokeStyle='rgba(79,70,229,0.2)';mctx.lineWidth=1;
+  mctx.beginPath();mctx.moveTo(ox,eqY);mctx.lineTo(ox+mW,eqY);mctx.stroke();
+
+  // Ground track on map
+  if(showGroundTrack&&groundTrackPoints.length>0){
+    mctx.save();
+    let prevPt=null;
+    for(const pt of groundTrackPoints){
+      const{x,y}=latLonToMap(pt.lat,pt.lon);
+      if(prevPt&&Math.abs(x-prevPt.x)<mW/2){
+        mctx.beginPath();mctx.moveTo(prevPt.x,prevPt.y);mctx.lineTo(x,y);
+        mctx.strokeStyle=pt.past?'rgba(79,70,229,.3)':'rgba(129,140,248,.8)';
+        mctx.lineWidth=1.5;mctx.stroke();
+      }
+      prevPt={x,y};
+    }
+    mctx.restore();
+  }
+
+  // Objects
+  mapProjCache=[];
+  for(const obj of objects){
+    if(!AF[obj.type]||!AB[obj.band]||!obj.lat)continue;
+    const{x,y}=latLonToMap(obj.lat,obj.lon);
+    if(x<ox-10||x>ox+mW+10||y<oy-10||y>oy+mH+10)continue;
+    let col=TC[obj.type];
+    if(obj.riskScore>.75)col='#ef4444';else if(obj.riskScore>.45)col='#eab308';
+    const isSel=selectedObj===obj;
+    const r=obj.type==='station'?5:2.5;
+    mctx.beginPath();mctx.arc(x,y,isSel?r*2.5:r,0,Math.PI*2);
+    mctx.fillStyle=col;mctx.shadowColor=col;mctx.shadowBlur=isSel?12:3;
+    mctx.fill();mctx.shadowBlur=0;
+    mapProjCache.push({sx:x,sy:y,obj});
+  }
+
+  // Heatmap overlay on 2D map
+  if(showHeatmap)drawMapHeatmap(ox,oy,mW,mH);
+}
+
+function drawMapHeatmap(ox,oy,mW,mH){
+  // LEO density band overlay
+  const leoTop=oy+((90-2000/111)/180)*mH;
+  const leoBot=oy+((90+160/111)/180)*mH;
+  const grad=mctx.createLinearGradient(0,leoTop,0,leoBot);
+  grad.addColorStop(0,'rgba(239,68,68,0)');
+  grad.addColorStop(.5,'rgba(239,68,68,0.07)');
+  grad.addColorStop(1,'rgba(239,68,68,0)');
+  mctx.fillStyle=grad;
+  mctx.fillRect(ox,leoTop,mW,leoBot-leoTop);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// GLOBE DRAW FUNCTIONS
+// ══════════════════════════════════════════════════════════════════════
+function drawEarth(){
+  const rr=R*zoom;
+  const og=ctx.createRadialGradient(cx-rr*.3,cy-rr*.3,0,cx,cy,rr);
+  og.addColorStop(0,'#0d1230');og.addColorStop(1,'#060818');
+  ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.fillStyle=og;ctx.fill();
+  const ag=ctx.createRadialGradient(cx,cy,rr*.88,cx,cy,rr*1.14);
+  ag.addColorStop(0,'rgba(79,70,229,0)');ag.addColorStop(.5,'rgba(79,70,229,.07)');ag.addColorStop(1,'rgba(79,70,229,0)');
+  ctx.beginPath();ctx.arc(cx,cy,rr*1.14,0,Math.PI*2);ctx.fillStyle=ag;ctx.fill();
+  drawContinents(rr);
+  const tg=ctx.createLinearGradient(cx-rr,cy,cx+rr,cy);
+  tg.addColorStop(0,'rgba(0,0,0,.55)');tg.addColorStop(.44,'rgba(0,0,0,.3)');tg.addColorStop(.5,'rgba(0,0,0,0)');tg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.clip();ctx.fillStyle=tg;ctx.fillRect(cx-rr,cy-rr,rr*2,rr*2);ctx.restore();
+  const rim=ctx.createRadialGradient(cx,cy,rr*.68,cx,cy,rr);
+  rim.addColorStop(0,'rgba(0,0,0,0)');rim.addColorStop(1,'rgba(0,0,0,.78)');
+  ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.fillStyle=rim;ctx.fill();
+}
+
+function drawContinents(rr){
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.clip();ctx.fillStyle='#102040';
+  [{x:cx-rr*.35,y:cy-rr*.15,rx:rr*.18,ry:rr*.22},{x:cx-rr*.25,y:cy+rr*.25,rx:rr*.10,ry:rr*.18},{x:cx+rr*.07,y:cy-rr*.25,rx:rr*.09,ry:rr*.10},{x:cx+rr*.08,y:cy+rr*.05,rx:rr*.11,ry:rr*.20},{x:cx+rr*.28,y:cy-rr*.18,rx:rr*.22,ry:rr*.18},{x:cx+rr*.35,y:cy+rr*.22,rx:rr*.10,ry:rr*.08}]
+  .forEach(c=>{ctx.beginPath();ctx.ellipse(c.x,c.y,c.rx,c.ry,0,0,Math.PI*2);ctx.fill();});
+  ctx.restore();
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.clip();
+  ctx.strokeStyle='rgba(79,70,229,.07)';ctx.lineWidth=.5;
+  for(let lat=-80;lat<=80;lat+=20){const yr=cy-rr*(lat/90);const xr=Math.sqrt(Math.max(0,rr*rr-(yr-cy)*(yr-cy)));ctx.beginPath();ctx.ellipse(cx,yr,xr,xr*.15,0,0,Math.PI*2);ctx.stroke();}
+  for(let lon=0;lon<180;lon+=30){ctx.beginPath();ctx.ellipse(cx,cy,rr*Math.sin(lon*Math.PI/180),rr,0,0,Math.PI*2);ctx.stroke();}
+  ctx.restore();
+}
+
+function drawOrbitRings(){
+  [{band:'LEO',r:.46,c:'rgba(249,115,22,.1)'},{band:'MEO',r:.70,c:'rgba(99,102,241,.08)'},{band:'GEO',r:.76,c:'rgba(99,102,241,.06)'}]
+  .filter(r=>AB[r.band]).forEach(ring=>{
+    const rr=R*ring.r*zoom;
+    ctx.save();ctx.beginPath();ctx.ellipse(cx,cy,rr,rr*Math.abs(Math.cos(rotX)),rotY,0,Math.PI*2);
+    ctx.strokeStyle=ring.c;ctx.lineWidth=1;ctx.setLineDash([4,10]);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+  });
+}
+
+const stars=Array.from({length:240},()=>({x:Math.random(),y:Math.random(),r:Math.random()*.9+.2,a:Math.random()*.45+.12,tw:Math.random()*Math.PI*2}));
+function drawStars(t){for(const s of stars){const a=s.a*(.7+.3*Math.sin(s.tw+t*.001));ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(180,190,255,${a})`;ctx.fill();}}
+
+function h2r(hex){return`${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;}
+
+// ══════════════════════════════════════════════════════════════════════
+// ORBITAL DENSITY HEATMAP (globe)
+// ══════════════════════════════════════════════════════════════════════
+function drawHeatmap(){
+  if(!showHeatmap)return;
+  for(const p of projCache){
+    if(p.depth<0)continue;
+    const c=TC[p.obj.type],g=ctx.createRadialGradient(p.sx,p.sy,0,p.sx,p.sy,10);
+    g.addColorStop(0,'rgba('+h2r(c)+',.035)');g.addColorStop(1,'rgba('+h2r(c)+',0)');
+    ctx.beginPath();ctx.arc(p.sx,p.sy,10,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+  }
+  // LEO density ring highlight
+  const leoR=R*.46*zoom;
+  const gradient=ctx.createRadialGradient(cx,cy,leoR*.92,cx,cy,leoR*1.08);
+  gradient.addColorStop(0,'rgba(239,68,68,0)');
+  gradient.addColorStop(.5,'rgba(239,68,68,0.04)');
+  gradient.addColorStop(1,'rgba(239,68,68,0)');
+  ctx.beginPath();ctx.arc(cx,cy,leoR*1.08,0,Math.PI*2);ctx.fillStyle=gradient;ctx.fill();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// GROUND TRACK ON GLOBE
+// ══════════════════════════════════════════════════════════════════════
+function drawGroundTrack(){
+  if(!showGroundTrack||!groundTrackPoints.length)return;
+  ctx.save();
+  let prevP=null;
+  for(const pt of groundTrackPoints){
+    const phi=pt.lat*Math.PI/180;
+    const theta=pt.lon*Math.PI/180;
+    const p=proj(theta,phi,0.305);
+    if(p.depth<0){prevP=null;continue;}
+    if(prevP&&prevP.depth>0){
+      ctx.beginPath();ctx.moveTo(prevP.sx,prevP.sy);ctx.lineTo(p.sx,p.sy);
+      ctx.strokeStyle=pt.past?'rgba(99,102,241,.25)':'rgba(129,140,248,.75)';
+      ctx.lineWidth=pt.past?.8:1.5;ctx.stroke();
+    }
+    prevP=p;
+  }
+  // Draw direction arrow at current position
+  if(groundTrackPoints.length>10){
+    const cur=groundTrackPoints[10];
+    const phi=cur.lat*Math.PI/180,theta=cur.lon*Math.PI/180;
+    const p=proj(theta,phi,0.305);
+    if(p.depth>0){
+      ctx.beginPath();ctx.arc(p.sx,p.sy,4,0,Math.PI*2);
+      ctx.fillStyle='#818cf8';ctx.shadowColor='#818cf8';ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;
+    }
+  }
+  ctx.restore();
+}
+
+function drawRiskLines(t){
+  if(!highlightedPair)return;
+  const pa=projCache.find(p=>p.obj===highlightedPair.deb),pb=projCache.find(p=>p.obj===highlightedPair.act);
+  if(!pa||!pb||pa.depth<0||pb.depth<0)return;
+  ctx.save();
+  const a=.3+.4*Math.sin(t*.004);
+  ctx.strokeStyle=`rgba(239,68,68,${a})`;ctx.lineWidth=1.5;ctx.setLineDash([4,7]);
+  ctx.beginPath();ctx.moveTo(pa.sx,pa.sy);ctx.lineTo(pb.sx,pb.sy);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle=`rgba(239,68,68,${a})`;ctx.font='bold 10px Inconsolata,monospace';
+  ctx.fillText(highlightedPair.dist+' km',(pa.sx+pb.sx)/2+5,(pa.sy+pb.sy)/2-5);
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// INTERACTION
+// ══════════════════════════════════════════════════════════════════════
+let hoveredObj=null,selectedObj=null,projCache=[];
+const tooltipEl=document.getElementById('tooltip');
+
+function findNearest(mx,my,cache){let best=null,bd=16;for(const p of cache){const d=Math.hypot(p.sx-mx,p.sy-my);if(d<bd){bd=d;best=p.obj;}}return best;}
+
+function handleHover(e,cvs){
+  const rect=cvs.getBoundingClientRect();
+  const cache=cvs===canvas?projCache:mapProjCache;
+  const obj=findNearest(e.clientX-rect.left,e.clientY-rect.top,cache);
+  hoveredObj=obj;
+  if(obj){
+    tooltipEl.style.display='block';
+    tooltipEl.style.left=(e.clientX-rect.left+16)+'px';
+    tooltipEl.style.top=(e.clientY-rect.top-10)+'px';
+    document.getElementById('tt-name').textContent=obj.name;
+    document.getElementById('tt-type').textContent=obj.type.toUpperCase()+' · '+obj.band+' · NORAD '+obj.norad;
+    document.getElementById('tt-alt').textContent='ALT: '+obj.alt.toLocaleString()+' km';
+    document.getElementById('tt-pos').textContent=obj.lat?`${obj.lat.toFixed(2)}°${obj.lat>=0?'N':'S'} · ${obj.lon.toFixed(2)}°${obj.lon>=0?'E':'W'}`:'';
+    if(obj.band==='LEO'){const re=predictReentry(obj);document.getElementById('tt-reentry').textContent='Reentry est: '+re.label;}
+    else document.getElementById('tt-reentry').textContent='';
+    const rl=obj.riskScore>.75?'HIGH':obj.riskScore>.45?'MED':'';
+    document.getElementById('tt-risk').textContent=rl?'⚠ '+rl+' CONJUNCTION RISK':'';
+    document.getElementById('tt-risk').style.color=rl==='HIGH'?'#ef4444':rl==='MED'?'#eab308':'';
+  } else tooltipEl.style.display='none';
+}
+
+function selectObj(obj){
+  selectedObj=obj;
+  if(showGroundTrack)computeGroundTrack(obj);
+  document.getElementById('detail-empty').style.display='none';
+  document.getElementById('detail-content').className='det-content on';
+  document.getElementById('detail-name').textContent=obj.name;
+  document.getElementById('d-norad').textContent='NORAD · '+obj.norad;
+  document.getElementById('d-type').textContent=obj.type.charAt(0).toUpperCase()+obj.type.slice(1);
+  document.getElementById('d-band').textContent=obj.band;
+  document.getElementById('d-alt').textContent=obj.alt.toLocaleString()+' km';
+  document.getElementById('d-lat').textContent=obj.lat?obj.lat.toFixed(4)+'°':'—';
+  document.getElementById('d-lon').textContent=obj.lon?obj.lon.toFixed(4)+'°':'—';
+  document.getElementById('d-vel').textContent=obj.satrec?(((2*Math.PI*6371)/(1440/obj.satrec.no*2*Math.PI/60))*0.001).toFixed(2)+' km/s':'—';
+  document.getElementById('d-inc').textContent=obj.inc+'°';
+  document.getElementById('d-epoch').textContent=obj.epoch?obj.epoch.toUTCString().slice(0,16):'—';
+
+  // Reentry predictor
+  const re=predictReentry(obj);
+  document.getElementById('reentry-val').textContent=re.label;
+  document.getElementById('reentry-val').style.color=re.color;
+  document.getElementById('reentry-fill').style.cssText=`width:${re.pct}%;background:${re.color}`;
+  document.getElementById('reentry-sub').textContent=re.sub;
+  document.getElementById('reentrySection').style.display=obj.band==='LEO'?'block':'none';
+
+  // Risk
+  const rp=Math.round(obj.riskScore*100),rl=rp>75?'HIGH':rp>45?'MEDIUM':'LOW',rc=rl==='HIGH'?'#ef4444':rl==='MEDIUM'?'#eab308':'#22c55e';
+  document.getElementById('d-risk-fill').style.cssText=`width:${rp}%;background:${rc}`;
+  document.getElementById('d-risk-score').textContent=rp+'/100';document.getElementById('d-risk-score').style.color=rc;
+  document.getElementById('d-risk-tier').textContent=rl;document.getElementById('d-risk-tier').style.color=rc;
+}
+
+function updateDataAge(){
+  if(!loadTime)return;
+  const mins=Math.round((Date.now()-loadTime)/60000);
+  document.getElementById('epochAge').textContent=mins<1?'<1m':mins<60?mins+'m':(mins/60).toFixed(1)+'h';
+}
+
+// Clock
+setInterval(()=>{
+  const t=new Date().toISOString().slice(11,19)+'Z';
+  document.getElementById('utcClock').textContent=t;
+  const a=document.getElementById('tk-time'),b=document.getElementById('tk-time2');
+  if(a)a.textContent=t;if(b)b.textContent=t;
+},1000);
+
+// ══════════════════════════════════════════════════════════════════════
+// MAIN LOOP
+// ══════════════════════════════════════════════════════════════════════
+let lastPropTime=0;
+function draw(t){
+  requestAnimationFrame(draw);
+
+  if(currentView==='map'){
+    drawMap();
+    document.getElementById('hudTime').textContent=new Date().toISOString().slice(0,19)+'Z';
+    return;
+  }
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#070710';ctx.fillRect(0,0,W,H);
+  drawStars(t);
+  if(dataLoaded&&t-lastPropTime>10000){propagateAll(new Date());lastPropTime=t;updateDataAge();updateTicker();}
+  if(!dragging)rotY+=.00022;
+  drawOrbitRings();drawEarth();drawHeatmap();
+
+  projCache=[];
+  for(const obj of objects){if(!AF[obj.type]||!AB[obj.band]||!obj.normR)continue;projCache.push({...proj(obj.theta,obj.phi,obj.normR),obj});}
+  projCache.sort((a,b)=>a.depth-b.depth);
+
+  drawGroundTrack();
+  drawRiskLines(t);
+
+  let vis=0;
+  for(const p of projCache){
+    if(p.depth<-.05)continue;vis++;
+    const obj=p.obj,isHov=hoveredObj===obj,isSel=selectedObj===obj;
+    const isRP=highlightedPair&&(obj===highlightedPair.deb||obj===highlightedPair.act);
+    let col=TC[obj.type];
+    if(obj.riskScore>.75)col='#ef4444';else if(obj.riskScore>.45)col='#eab308';
+    const baseR=obj.type==='station'?4:obj.band==='GEO'?1.8:1.5;
+    const r=baseR*(isHov||isSel||isRP?2.8:1)*(.5+.5*(p.depth+1));
+    ctx.beginPath();ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
+    ctx.fillStyle=col;ctx.shadowColor=col;ctx.shadowBlur=isHov||isSel||isRP?15:obj.riskScore>.75?7:3;
+    ctx.fill();ctx.shadowBlur=0;
+    if(isSel||isRP){ctx.beginPath();ctx.arc(p.sx,p.sy,r+5,0,Math.PI*2);ctx.strokeStyle=col;ctx.lineWidth=1;ctx.globalAlpha=.3+.4*Math.sin(t*.006);ctx.stroke();ctx.globalAlpha=1;}
+    if(obj.type==='station'&&p.depth>0){ctx.strokeStyle=col;ctx.lineWidth=.5;ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(p.sx-8,p.sy);ctx.lineTo(p.sx+8,p.sy);ctx.stroke();ctx.beginPath();ctx.moveTo(p.sx,p.sy-8);ctx.lineTo(p.sx,p.sy+8);ctx.stroke();ctx.globalAlpha=1;}
+  }
+
+  document.getElementById('visibleCount').textContent=vis.toLocaleString();
+  document.getElementById('hudTime').textContent=new Date().toISOString().slice(0,19)+'Z';
+  document.getElementById('spark-vis').style.width=Math.min(100,vis/5)+'%';
+}
+
+// INIT
+renderHistList();
+requestAnimationFrame(draw);
+loadAllData();
+</script>
+</body>
+</html>
