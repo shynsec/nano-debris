@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nano Debris - Orbital Intelligence</title>
+<title>Nano Debris — Orbital Intelligence</title>
 <!-- PATCH 3: Content Security Policy
      - script-src: allows inline scripts (needed for the app's JS block) + cdnjs for satellite.js
      - connect-src: only CelesTrak for TLE data fetches
@@ -260,6 +260,64 @@ body{background:var(--bg);font-family:var(--font-ui);color:var(--text-mid);displ
 
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.8)}}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* ── RIGHT PANEL TABS ──────────────────────────────────────────────── */
+.rp-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--bg2);}
+.rp-tab{flex:1;font-family:var(--font-mono);font-size:.52rem;letter-spacing:1.5px;text-transform:uppercase;padding:8px 4px;text-align:center;cursor:pointer;color:var(--text);border-bottom:2px solid transparent;transition:all .2s;}
+.rp-tab:hover{color:var(--text-mid);}
+.rp-tab.active{color:var(--indigo3);border-bottom-color:var(--indigo2);}
+.rp-pane{display:none;flex:1;overflow-y:auto;flex-direction:column;}
+.rp-pane.active{display:flex;}
+.rp-pane::-webkit-scrollbar{width:3px;}
+.rp-pane::-webkit-scrollbar-thumb{background:var(--border2);}
+
+/* ── WATCHLIST ─────────────────────────────────────────────────────── */
+.wl-add{display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid var(--border);}
+.wl-input{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text-hi);font-family:var(--font-mono);font-size:.68rem;padding:5px 9px;outline:none;transition:border-color .2s;}
+.wl-input::placeholder{color:var(--text);}
+.wl-input:focus{border-color:var(--indigo);}
+.wl-btn{background:var(--indigo-dim);border:1px solid var(--border2);color:var(--indigo3);font-family:var(--font-mono);font-size:.58rem;padding:5px 10px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.wl-btn:hover{background:rgba(79,70,229,.3);}
+.wl-empty{padding:16px 14px;font-family:var(--font-mono);font-size:.58rem;color:var(--text);opacity:.4;line-height:1.9;}
+.wl-item{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;}
+.wl-item:hover{background:rgba(79,70,229,.05);}
+.wl-item-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.wl-item-info{flex:1;min-width:0;}
+.wl-item-name{font-family:var(--font-mono);font-size:.6rem;color:var(--text-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.wl-item-meta{font-family:var(--font-mono);font-size:.52rem;color:var(--text);margin-top:1px;}
+.wl-item-pos{font-family:var(--font-mono);font-size:.52rem;color:var(--indigo3);margin-top:1px;}
+.wl-item-risk{font-family:var(--font-mono);font-size:.5rem;font-weight:700;padding:1px 5px;flex-shrink:0;}
+.wl-remove{background:none;border:none;color:var(--text);font-size:.9rem;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;opacity:.4;transition:opacity .2s;}
+.wl-remove:hover{opacity:1;color:var(--red);}
+.wl-count{font-family:var(--font-mono);font-size:.5rem;color:var(--text);opacity:.6;}
+
+/* ── PASS PREDICTOR ────────────────────────────────────────────────── */
+.pp-form{padding:10px 14px;border-bottom:1px solid var(--border);}
+.pp-row{display:flex;gap:6px;margin-bottom:6px;}
+.pp-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:4px;}
+.pp-input{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text-hi);font-family:var(--font-mono);font-size:.68rem;padding:5px 9px;outline:none;transition:border-color .2s;min-width:0;}
+.pp-input::placeholder{color:var(--text);}
+.pp-input:focus{border-color:var(--indigo);}
+.pp-btn{background:var(--indigo-dim);border:1px solid var(--border2);color:var(--indigo3);font-family:var(--font-mono);font-size:.58rem;padding:5px 12px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.pp-btn:hover{background:rgba(79,70,229,.3);}
+.pp-hint{font-family:var(--font-mono);font-size:.5rem;color:var(--text);opacity:.5;margin-top:4px;}
+.pp-loc{font-family:var(--font-mono);font-size:.55rem;color:var(--indigo3);margin-top:4px;}
+.pp-results{flex:1;}
+.pp-empty{padding:14px;font-family:var(--font-mono);font-size:.58rem;color:var(--text);opacity:.4;line-height:1.9;}
+.pass-item{padding:9px 14px;border-bottom:1px solid var(--border);}
+.pass-item-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.pass-obj{font-family:var(--font-mono);font-size:.6rem;color:var(--text-hi);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;}
+.pass-quality{font-family:var(--font-mono);font-size:.5rem;font-weight:700;padding:2px 6px;}
+.pass-qual-EXCELLENT{background:#22c55e;color:#000;}
+.pass-qual-GOOD{background:#4f46e5;color:#fff;}
+.pass-qual-POOR{background:rgba(255,255,255,.1);color:var(--text-mid);}
+.pass-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);}
+.pass-cell{background:var(--bg);padding:5px 7px;}
+.pass-ck{font-family:var(--font-mono);font-size:.46rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:2px;}
+.pass-cv{font-family:var(--font-mono);font-size:.6rem;color:var(--text-hi);font-weight:500;}
+.pass-cv.green{color:var(--green);}
+.pp-computing{padding:14px;font-family:var(--font-mono);font-size:.58rem;color:var(--indigo3);display:none;}
+.pp-computing.visible{display:block;}
 </style>
 </head>
 <body>
@@ -387,69 +445,128 @@ body{background:var(--bg);font-family:var(--font-ui);color:var(--text-mid);displ
     </div>
   </div>
 
-  <!-- RIGHT PANEL -->
+  <!-- RIGHT PANEL — tabbed: Data | Watchlist | Passes -->
   <div class="rp">
-    <!-- TLE -->
-    <div class="rp-section">
-      <div class="rp-head"><span class="rp-title">TLE Feed</span><span class="rp-meta">celestrak.org · GP/JSON</span></div>
-      <div class="tle-body">
-        <div class="tle-status"><div class="tle-dot loading" id="tleIndicator"></div><span class="tle-txt loading" id="tleStatusText">Connecting…</span><span class="tle-src">GP/JSON</span></div>
-        <div class="tle-box"><div class="tle-ln hdr" id="tleName">AWAITING DATA…</div><div class="tle-ln" id="tleLine1">1 —</div><div class="tle-ln" id="tleLine2">2 —</div><div class="tle-fade"></div></div>
-        <div class="tle-epoch" id="tleEpoch">Epoch: —</div>
-        <div class="tle-chips" id="tleStats"></div>
+
+    <!-- TAB NAVIGATION -->
+    <div class="rp-tabs">
+      <div class="rp-tab active" id="tab-data"    onclick="switchTab('data')">Data</div>
+      <div class="rp-tab"        id="tab-watch"   onclick="switchTab('watch')">Watchlist <span class="wl-count" id="wl-tab-count"></span></div>
+      <div class="rp-tab"        id="tab-passes"  onclick="switchTab('passes')">Pass Predictor</div>
+    </div>
+
+    <!-- PANE 1: DATA (TLE + History + Conjunctions + Detail) -->
+    <div class="rp-pane active" id="pane-data">
+
+      <!-- TLE -->
+      <div class="rp-section">
+        <div class="rp-head"><span class="rp-title">TLE Feed</span><span class="rp-meta">celestrak.org · GP/JSON</span></div>
+        <div class="tle-body">
+          <div class="tle-status"><div class="tle-dot loading" id="tleIndicator"></div><span class="tle-txt loading" id="tleStatusText">Connecting…</span><span class="tle-src">GP/JSON</span></div>
+          <div class="tle-box"><div class="tle-ln hdr" id="tleName">AWAITING DATA…</div><div class="tle-ln" id="tleLine1">1 —</div><div class="tle-ln" id="tleLine2">2 —</div><div class="tle-fade"></div></div>
+          <div class="tle-epoch" id="tleEpoch">Epoch: —</div>
+          <div class="tle-chips" id="tleStats"></div>
+        </div>
       </div>
-    </div>
 
-    <!-- HISTORICAL EVENTS -->
-    <div class="rp-section hist-section">
-      <div class="rp-head"><span class="rp-title">Historical Events</span><span class="rp-meta">Click to explore</span></div>
-      <div id="histList"></div>
-    </div>
-
-    <!-- CONJUNCTIONS -->
-    <div class="rp-section">
-      <div class="rp-head"><span class="rp-title">Conjunctions — SOCRATES</span><span class="rp-badge" id="riskCountSide" style="font-family:var(--font-mono);font-size:.56rem;font-weight:700;color:var(--red)">—</span></div>
-      <div id="riskList"><div style="padding:9px 14px;font-family:var(--font-mono);font-size:.57rem;color:var(--text);opacity:.4">Loading…</div></div>
-    </div>
-
-    <!-- OBJECT DETAIL -->
-    <div class="rp-section grow">
-      <div class="rp-head">
-        <span class="rp-title">Object Detail</span>
-        <button class="rp-action" onclick="if(selectedObj)toggleGroundTrack(true)">Track ↗</button>
+      <!-- HISTORICAL EVENTS -->
+      <div class="rp-section hist-section">
+        <div class="rp-head"><span class="rp-title">Historical Events</span><span class="rp-meta">Click to explore</span></div>
+        <div id="histList"></div>
       </div>
-      <div class="det-body">
-        <div class="det-empty" id="detail-empty">← Select any object on<br>the globe for SGP4 data</div>
-        <div class="det-content" id="detail-content">
-          <div class="det-name" id="detail-name">—</div>
-          <div class="det-norad" id="d-norad">NORAD —</div>
-          <div class="det-grid">
-            <div class="det-cell"><div class="det-ck">Type</div><div class="det-cv" id="d-type">—</div></div>
-            <div class="det-cell"><div class="det-ck">Band</div><div class="det-cv" id="d-band">—</div></div>
-            <div class="det-cell"><div class="det-ck">Altitude</div><div class="det-cv" id="d-alt">—</div></div>
-            <div class="det-cell"><div class="det-ck">Latitude</div><div class="det-cv" id="d-lat">—</div></div>
-            <div class="det-cell"><div class="det-ck">Longitude</div><div class="det-cv" id="d-lon">—</div></div>
-            <div class="det-cell"><div class="det-ck">Velocity</div><div class="det-cv" id="d-vel">—</div></div>
-            <div class="det-cell wide"><div class="det-ck">Inclination</div><div class="det-cv" id="d-inc">—</div></div>
-            <div class="det-cell full"><div class="det-ck">TLE Epoch</div><div class="det-cv" id="d-epoch">—</div></div>
+
+      <!-- CONJUNCTIONS -->
+      <div class="rp-section">
+        <div class="rp-head"><span class="rp-title">Conjunctions — SOCRATES</span><span class="rp-badge" id="riskCountSide" style="font-family:var(--font-mono);font-size:.56rem;font-weight:700;color:var(--red)">—</span></div>
+        <div id="riskList"><div style="padding:9px 14px;font-family:var(--font-mono);font-size:.57rem;color:var(--text);opacity:.4">Loading…</div></div>
+      </div>
+
+      <!-- OBJECT DETAIL -->
+      <div class="rp-section" style="flex:1;overflow-y:auto;">
+        <div class="rp-head">
+          <span class="rp-title">Object Detail</span>
+          <div style="display:flex;gap:6px;">
+            <button class="rp-action" onclick="if(selectedObj)addToWatchlist(selectedObj)">+ Watch</button>
+            <button class="rp-action" onclick="if(selectedObj)toggleGroundTrack(true)">Track ↗</button>
           </div>
-          <!-- REENTRY PREDICTOR -->
-          <div class="reentry-bar" id="reentrySection">
-            <div class="reentry-head">
-              <div class="reentry-label">Reentry Predictor</div>
-              <div class="reentry-val" id="reentry-val">—</div>
+        </div>
+        <div class="det-body">
+          <div class="det-empty" id="detail-empty">← Select any object on<br>the globe for SGP4 data</div>
+          <div class="det-content" id="detail-content">
+            <div class="det-name" id="detail-name">—</div>
+            <div class="det-norad" id="d-norad">NORAD —</div>
+            <div class="det-grid">
+              <div class="det-cell"><div class="det-ck">Type</div><div class="det-cv" id="d-type">—</div></div>
+              <div class="det-cell"><div class="det-ck">Band</div><div class="det-cv" id="d-band">—</div></div>
+              <div class="det-cell"><div class="det-ck">Altitude</div><div class="det-cv" id="d-alt">—</div></div>
+              <div class="det-cell"><div class="det-ck">Latitude</div><div class="det-cv" id="d-lat">—</div></div>
+              <div class="det-cell"><div class="det-ck">Longitude</div><div class="det-cv" id="d-lon">—</div></div>
+              <div class="det-cell"><div class="det-ck">Velocity</div><div class="det-cv" id="d-vel">—</div></div>
+              <div class="det-cell wide"><div class="det-ck">Inclination</div><div class="det-cv" id="d-inc">—</div></div>
+              <div class="det-cell full"><div class="det-ck">TLE Epoch</div><div class="det-cv" id="d-epoch">—</div></div>
             </div>
-            <div class="reentry-meter"><div class="reentry-fill" id="reentry-fill" style="width:0%"></div></div>
-            <div style="font-family:var(--font-mono);font-size:.5rem;color:var(--text);margin-top:4px;" id="reentry-sub">—</div>
-          </div>
-          <div class="det-risk">
-            <div class="det-risk-head"><div class="det-risk-label">Conjunction Risk Index</div><div class="det-risk-score" id="d-risk-score">—</div></div>
-            <div class="det-risk-bar"><div class="det-risk-fill" id="d-risk-fill" style="width:0%"></div></div>
-            <div class="det-risk-tier" id="d-risk-tier">—</div>
+            <div class="reentry-bar" id="reentrySection">
+              <div class="reentry-head">
+                <div class="reentry-label">Reentry Predictor</div>
+                <div class="reentry-val" id="reentry-val">—</div>
+              </div>
+              <div class="reentry-meter"><div class="reentry-fill" id="reentry-fill" style="width:0%"></div></div>
+              <div style="font-family:var(--font-mono);font-size:.5rem;color:var(--text);margin-top:4px;" id="reentry-sub">—</div>
+            </div>
+            <div class="det-risk">
+              <div class="det-risk-head"><div class="det-risk-label">Conjunction Risk Index</div><div class="det-risk-score" id="d-risk-score">—</div></div>
+              <div class="det-risk-bar"><div class="det-risk-fill" id="d-risk-fill" style="width:0%"></div></div>
+              <div class="det-risk-tier" id="d-risk-tier">—</div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- PANE 2: WATCHLIST -->
+    <div class="rp-pane" id="pane-watch">
+      <div class="rp-head" style="flex-shrink:0;">
+        <span class="rp-title">Watchlist</span>
+        <span class="rp-meta" id="wl-head-count">0 / 20 objects</span>
+      </div>
+      <div class="wl-add">
+        <input class="wl-input" id="wlInput" type="text" placeholder="NORAD ID or name…" autocomplete="off">
+        <button class="wl-btn" onclick="wlAddFromInput()">+ Add</button>
+      </div>
+      <div id="wlList" style="flex:1;overflow-y:auto;">
+        <div class="wl-empty" id="wlEmpty">No objects pinned yet.<br>Search for a satellite and<br>click <strong>+ Watch</strong> to add it,<br>or enter a NORAD ID above.</div>
+      </div>
+    </div>
+
+    <!-- PANE 3: PASS PREDICTOR -->
+    <div class="rp-pane" id="pane-passes">
+      <div class="rp-head" style="flex-shrink:0;">
+        <span class="rp-title">Pass Predictor</span>
+        <span class="rp-meta">Next 24 hours</span>
+      </div>
+      <div class="pp-form">
+        <div class="pp-label">Observer Location</div>
+        <div class="pp-row">
+          <input class="pp-input" id="ppLat" type="number" placeholder="Latitude" step="0.0001" min="-90" max="90">
+          <input class="pp-input" id="ppLon" type="number" placeholder="Longitude" step="0.0001" min="-180" max="180">
+        </div>
+        <div class="pp-row">
+          <input class="pp-input" id="ppAlt" type="number" placeholder="Elevation (m)" step="1" min="0" value="0" style="max-width:130px;">
+          <input class="pp-input" id="ppMinEl" type="number" placeholder="Min elev °" step="1" min="0" max="90" value="10" style="max-width:100px;">
+          <button class="pp-btn" onclick="runPassPredictor()">Compute</button>
+        </div>
+        <div class="pp-row" style="margin-bottom:0;">
+          <button class="pp-btn" onclick="useMyLocation()" style="width:100%;text-align:center;">Use My Location</button>
+        </div>
+        <div class="pp-loc" id="ppLocLabel"></div>
+        <div class="pp-hint">Shows passes for all active satellites &amp; space stations above minimum elevation angle.</div>
+      </div>
+      <div class="pp-computing" id="ppComputing">Computing passes… this may take a moment.</div>
+      <div class="pp-results" id="ppResults">
+        <div class="pp-empty" id="ppEmpty">Enter your location above<br>and click Compute to find<br>upcoming satellite passes.</div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1161,7 +1278,7 @@ function draw(t){
   ctx.clearRect(0,0,W,H);
   ctx.fillStyle='#070710';ctx.fillRect(0,0,W,H);
   drawStars(t);
-  if(dataLoaded&&t-lastPropTime>10000){propagateAll(new Date());lastPropTime=t;updateDataAge();updateTicker();}
+  if(dataLoaded&&t-lastPropTime>10000){propagateAll(new Date());lastPropTime=t;updateDataAge();updateTicker();if(watchlist.length)renderWatchlist();}
   if(!dragging)rotY+=.00022;
   drawOrbitRings();drawEarth();drawHeatmap();
 
@@ -1171,6 +1288,7 @@ function draw(t){
 
   drawGroundTrack();
   drawRiskLines(t);
+  drawWatchlistRings();
 
   let vis=0;
   for(const p of projCache){
@@ -1195,6 +1313,333 @@ function draw(t){
 
 // INIT
 renderHistList();
+// ══════════════════════════════════════════════════════════════════════
+// TAB NAVIGATION
+// ══════════════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  ['data','watch','passes'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('pane-'+t).classList.toggle('active', t===tab);
+  });
+  if(tab==='watch') renderWatchlist();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// WATCHLIST — persisted to localStorage, max 20 objects
+// ══════════════════════════════════════════════════════════════════════
+const WL_KEY = 'debrisfield_watchlist_v1';
+const WL_MAX = 20;
+let watchlist = []; // array of NORAD ID strings
+
+function wlLoad() {
+  try {
+    const saved = localStorage.getItem(WL_KEY);
+    watchlist = saved ? JSON.parse(saved) : [];
+  } catch(e) { watchlist = []; }
+}
+
+function wlSave() {
+  try { localStorage.setItem(WL_KEY, JSON.stringify(watchlist)); }
+  catch(e) { console.warn('Watchlist save failed:', e.message); }
+}
+
+function addToWatchlist(obj) {
+  if(!obj) return;
+  const id = String(obj.norad);
+  if(watchlist.includes(id)) {
+    switchTab('watch');
+    return;
+  }
+  if(watchlist.length >= WL_MAX) {
+    alert('Watchlist is full (max ' + WL_MAX + ' objects). Remove one first.');
+    return;
+  }
+  watchlist.push(id);
+  wlSave();
+  updateWlCount();
+  renderWatchlist();
+  switchTab('watch');
+}
+
+function removeFromWatchlist(norad) {
+  watchlist = watchlist.filter(id => id !== String(norad));
+  wlSave();
+  updateWlCount();
+  renderWatchlist();
+}
+
+function wlAddFromInput() {
+  const val = document.getElementById('wlInput').value.trim();
+  if(!val) return;
+  // Try NORAD ID first, then name search
+  const byNorad = objects.find(o => String(o.norad) === val);
+  const byName  = objects.find(o => o.name.toLowerCase().includes(val.toLowerCase()));
+  const obj = byNorad || byName;
+  if(!obj) {
+    alert('Object "' + val + '" not found in loaded data. Try a NORAD ID or exact name.');
+    return;
+  }
+  document.getElementById('wlInput').value = '';
+  addToWatchlist(obj);
+}
+
+function updateWlCount() {
+  const n = watchlist.length;
+  const label = n ? n+'/'+WL_MAX : '';
+  document.getElementById('wl-tab-count').textContent = label;
+  document.getElementById('wl-head-count').textContent = n+' / '+WL_MAX+' objects';
+}
+
+function renderWatchlist() {
+  const list = document.getElementById('wlList');
+  const empty = document.getElementById('wlEmpty');
+  if(!watchlist.length) {
+    empty.style.display = 'block';
+    // Clear any existing items but keep empty msg
+    Array.from(list.children).forEach(c => { if(c !== empty) c.remove(); });
+    return;
+  }
+  empty.style.display = 'none';
+  // Remove old items
+  Array.from(list.children).forEach(c => { if(c.classList.contains('wl-item')) c.remove(); });
+
+  for(const norad of watchlist) {
+    const obj = objects.find(o => String(o.norad) === norad);
+    const el = document.createElement('div');
+    el.className = 'wl-item';
+
+    if(!obj) {
+      // Object not in current dataset — show placeholder
+      el.innerHTML = `<div class="wl-item-dot" style="background:var(--text)"></div>
+        <div class="wl-item-info">
+          <div class="wl-item-name">NORAD ${esc(norad)}</div>
+          <div class="wl-item-meta">Not in current dataset</div>
+        </div>
+        <button class="wl-remove" onclick="event.stopPropagation();removeFromWatchlist('${esc(norad)}')" title="Remove">✕</button>`;
+      list.insertBefore(el, empty);
+      continue;
+    }
+
+    const col = obj.riskScore > .75 ? '#ef4444' : obj.riskScore > .45 ? '#eab308' : (TC[obj.type] || '#6b7280');
+    const rl  = obj.riskScore > .75 ? 'HIGH' : obj.riskScore > .45 ? 'MED' : '';
+    const riskBg = rl === 'HIGH' ? '#ef4444' : rl === 'MED' ? '#eab308' : '';
+    const posStr = obj.lat ? `${obj.lat.toFixed(2)}°${obj.lat>=0?'N':'S'} · ${obj.lon.toFixed(2)}°${obj.lon>=0?'E':'W'} · ${obj.alt.toLocaleString()} km` : obj.alt.toLocaleString()+' km';
+
+    el.innerHTML = `<div class="wl-item-dot" style="background:${col}"></div>
+      <div class="wl-item-info">
+        <div class="wl-item-name">${esc(obj.name)}</div>
+        <div class="wl-item-meta">${esc(obj.type.charAt(0).toUpperCase()+obj.type.slice(1))} · ${esc(obj.band)} · NORAD ${esc(norad)}</div>
+        <div class="wl-item-pos">${esc(posStr)}</div>
+      </div>
+      ${rl ? `<span class="wl-item-risk" style="background:${riskBg};color:#000">${esc(rl)}</span>` : ''}
+      <button class="wl-remove" onclick="event.stopPropagation();removeFromWatchlist('${esc(norad)}')" title="Remove">✕</button>`;
+
+    el.addEventListener('click', () => {
+      selectObj(obj);
+      switchTab('data');
+    });
+
+    list.insertBefore(el, empty);
+  }
+}
+
+// Highlight watchlisted objects on globe with a ring
+function drawWatchlistRings() {
+  if(!watchlist.length) return;
+  for(const p of projCache) {
+    if(!watchlist.includes(String(p.obj.norad))) continue;
+    if(p.depth < 0) continue;
+    const col = TC[p.obj.type] || '#818cf8';
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, 8, 0, Math.PI*2);
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.6;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// PASS PREDICTOR
+// Uses satellite.js observe() to find passes over an observer location
+// for the next 24 hours across all active satellites + space stations
+// ══════════════════════════════════════════════════════════════════════
+let ppLocation = null; // { lat, lon, alt } in degrees/metres
+
+function useMyLocation() {
+  if(!navigator.geolocation) {
+    alert('Geolocation is not supported by your browser.');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const lat = pos.coords.latitude.toFixed(4);
+    const lon = pos.coords.longitude.toFixed(4);
+    const alt = Math.round(pos.coords.altitude || 0);
+    document.getElementById('ppLat').value = lat;
+    document.getElementById('ppLon').value = lon;
+    document.getElementById('ppAlt').value = alt;
+    document.getElementById('ppLocLabel').textContent = `📍 ${lat}°, ${lon}° · ${alt}m`;
+  }, err => {
+    alert('Could not get location: ' + err.message);
+  });
+}
+
+function runPassPredictor() {
+  const lat    = parseFloat(document.getElementById('ppLat').value);
+  const lon    = parseFloat(document.getElementById('ppLon').value);
+  const altM   = parseFloat(document.getElementById('ppAlt').value) || 0;
+  const minEl  = parseFloat(document.getElementById('ppMinEl').value) || 10;
+
+  if(isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    alert('Please enter a valid latitude (−90 to 90) and longitude (−180 to 180).');
+    return;
+  }
+
+  ppLocation = { lat, lon, alt: altM };
+  document.getElementById('ppLocLabel').textContent = `📍 ${lat.toFixed(4)}°, ${lon.toFixed(4)}° · ${altM}m`;
+  document.getElementById('ppEmpty').style.display = 'none';
+  document.getElementById('ppComputing').classList.add('visible');
+
+  // Clear previous results
+  const results = document.getElementById('ppResults');
+  Array.from(results.children).forEach(c => {
+    if(!c.id) c.remove(); // keep #ppEmpty and #ppComputing
+  });
+
+  // Run async so UI updates first
+  setTimeout(() => {
+    const passes = computePasses(lat, lon, altM / 1000, minEl); // alt in km for satellite.js
+    document.getElementById('ppComputing').classList.remove('visible');
+    renderPasses(passes);
+  }, 50);
+}
+
+function computePasses(obsLat, obsLon, obsAltKm, minElDeg) {
+  // Observer position as satellite.js geographic object
+  const obsGeo = {
+    latitude:  obsLat  * Math.PI / 180, // radians
+    longitude: obsLon  * Math.PI / 180,
+    height:    obsAltKm,
+  };
+
+  const now      = new Date();
+  const end      = new Date(now.getTime() + 24 * 3600 * 1000); // 24h window
+  const stepMs   = 30000; // 30-second steps for pass detection
+  const passes   = [];
+
+  // Only check active sats + stations for passes (debris/rockets rarely worth tracking visually)
+  const candidates = objects.filter(o => o.type === 'active' || o.type === 'station');
+
+  for(const obj of candidates) {
+    let inPass = false;
+    let passStart, passEnd, peakEl = 0, peakAz = 0, peakTime;
+
+    for(let t = now.getTime(); t <= end.getTime(); t += stepMs) {
+      const date = new Date(t);
+      try {
+        const gmst = satellite.gstime(date);
+        const pv   = satellite.propagate(obj.satrec, date);
+        if(!pv.position || isNaN(pv.position.x)) continue;
+
+        // ECI → look angles from observer
+        const posGeo  = satellite.eciToGeodetic(pv.position, gmst);
+        const lookAng = satellite.ecfToLookAngles(obsGeo, satellite.geodeticToEcf(posGeo));
+        const elDeg   = lookAng.elevation * 180 / Math.PI;
+        const azDeg   = lookAng.azimuth   * 180 / Math.PI;
+
+        if(elDeg >= minElDeg) {
+          if(!inPass) {
+            inPass = true;
+            passStart = new Date(t);
+            peakEl = elDeg;
+            peakAz = azDeg;
+            peakTime = date;
+          } else if(elDeg > peakEl) {
+            peakEl = elDeg;
+            peakAz = azDeg;
+            peakTime = date;
+          }
+          passEnd = new Date(t);
+        } else if(inPass) {
+          inPass = false;
+          const durationSec = (passEnd - passStart) / 1000;
+          if(durationSec >= 60) { // ignore very short flickers
+            passes.push({
+              obj,
+              start:    passStart,
+              end:      passEnd,
+              peak:     peakTime,
+              peakEl:   peakEl,
+              peakAz:   peakAz,
+              duration: durationSec,
+              quality:  peakEl >= 45 ? 'EXCELLENT' : peakEl >= 20 ? 'GOOD' : 'POOR',
+            });
+          }
+          peakEl = 0;
+        }
+      } catch(e) { /* skip propagation errors */ }
+    }
+  }
+
+  // Sort by start time
+  passes.sort((a, b) => a.start - b.start);
+  return passes.slice(0, 40); // cap at 40 results
+}
+
+function renderPasses(passes) {
+  const results = document.getElementById('ppResults');
+  const empty   = document.getElementById('ppEmpty');
+
+  if(!passes.length) {
+    empty.textContent = 'No passes found in the next 24 hours above the minimum elevation angle. Try lowering the minimum elevation.';
+    empty.style.display = 'block';
+    return;
+  }
+
+  empty.style.display = 'none';
+
+  for(const p of passes) {
+    const el = document.createElement('div');
+    el.className = 'pass-item';
+
+    const startStr = p.start.toUTCString().slice(0,25);
+    const durMin   = Math.floor(p.duration / 60);
+    const durSec   = Math.round(p.duration % 60);
+    const durStr   = durMin > 0 ? `${durMin}m ${durSec}s` : `${durSec}s`;
+    const azDir    = azToCompass(p.peakAz);
+
+    el.innerHTML = `
+      <div class="pass-item-head">
+        <div class="pass-obj" title="${esc(p.obj.name)}">${esc(p.obj.name)}</div>
+        <span class="pass-quality pass-qual-${esc(p.quality)}">${esc(p.quality)}</span>
+      </div>
+      <div class="pass-grid">
+        <div class="pass-cell pass-cell-full" style="grid-column:span 3"><div class="pass-ck">Rise (UTC)</div><div class="pass-cv">${esc(startStr)}</div></div>
+        <div class="pass-cell"><div class="pass-ck">Duration</div><div class="pass-cv ${p.quality==='EXCELLENT'?'green':''}">${esc(durStr)}</div></div>
+        <div class="pass-cell"><div class="pass-ck">Peak Elev</div><div class="pass-cv">${esc(p.peakEl.toFixed(1))}°</div></div>
+        <div class="pass-cell"><div class="pass-ck">Direction</div><div class="pass-cv">${esc(azDir)}</div></div>
+      </div>`;
+
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => {
+      selectObj(p.obj);
+      switchTab('data');
+    });
+
+    results.appendChild(el);
+  }
+}
+
+function azToCompass(deg) {
+  const dirs = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════════════════════════════
+wlLoad();
 requestAnimationFrame(draw);
 loadAllData();
 </script>
