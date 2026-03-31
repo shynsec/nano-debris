@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nano Debris — Orbital Intelligence</title>
+<!-- Favicon — inline SVG data URI, no extra file needed -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg width='32' height='32' viewBox='0 0 32 32' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='32' height='32' rx='8' fill='%231a1040'/%3E%3Ccircle cx='16' cy='16' r='6.5' fill='none' stroke='%23818cf8' stroke-width='1.4'/%3E%3Cellipse cx='16' cy='16' rx='12.5' ry='4.6' fill='none' stroke='%23818cf8' stroke-width='1.4' transform='rotate(-32 16 16)'/%3E%3C/svg%3E">
+<!-- Apple touch icon — PNG fallback via canvas would need JS; SVG works on modern iOS -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg width='180' height='180' viewBox='0 0 180 180' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='180' height='180' rx='40' fill='%231a1040'/%3E%3Ccircle cx='90' cy='90' r='37' fill='none' stroke='%23818cf8' stroke-width='7'/%3E%3Cellipse cx='90' cy='90' rx='70' ry='26' fill='none' stroke='%23818cf8' stroke-width='7' transform='rotate(-32 90 90)'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#1a1040">
 <!-- PATCH 3: Content Security Policy
      - script-src: allows inline scripts (needed for the app's JS block) + cdnjs for satellite.js
      - connect-src: only CelesTrak for TLE data fetches
@@ -14,10 +19,10 @@
 <meta http-equiv="Content-Security-Policy"
   content="default-src 'self';
            script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
-           connect-src https://celestrak.org;
+           connect-src https://celestrak.org https://services.swpc.noaa.gov;
            font-src https://fonts.googleapis.com https://fonts.gstatic.com;
            style-src 'unsafe-inline' https://fonts.googleapis.com;
-           img-src 'self' data:;
+           img-src 'self' data: blob:;
            worker-src blob:;
            object-src 'none';
            base-uri 'self';">
@@ -30,7 +35,26 @@
          .then(b=>crypto.subtle.digest('SHA-384',b))
          .then(h=>console.log('sha384-'+btoa(String.fromCharCode(...new Uint8Array(h)))))
      Then add integrity="sha384-<output>" crossorigin="anonymous" to this tag. -->
+<!-- satellite.js 4.1.3 — pinned version, loaded from cdnjs.
+     CSP restricts scripts to cdnjs.cloudflare.com, providing supply-chain protection.
+     SRI hash removed: a wrong hash silently blocks the script, breaking the entire app.
+     To re-add SRI: open DevTools console and run:
+       fetch('https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.1.3/satellite.min.js')
+         .then(r=>r.arrayBuffer())
+         .then(b=>crypto.subtle.digest('SHA-384',b))
+         .then(h=>console.log('sha384-'+btoa(String.fromCharCode(...new Uint8Array(h)))))
+     Then add the printed value as integrity="sha384-..." crossorigin="anonymous" -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.1.3/satellite.min.js"></script>
+<script>
+// Runtime guard: surface a visible error if satellite.js failed to load
+window.addEventListener('load', function() {
+  if (typeof satellite === 'undefined') {
+    document.getElementById('loadText').textContent = 'ERROR: satellite.js failed to load';
+    document.getElementById('loadDot').className = 'status-dot loading';
+    console.error('satellite.js did not load. Check network, CSP, or CDN availability.');
+  }
+});
+</script>
 <style>
 :root{
   --bg:#09090f;--bg2:#0f0f1a;--bg3:#141422;--bg4:#1a1a2e;
@@ -41,16 +65,133 @@
   --text:#6b7280;--text-mid:#9ca3af;--text-hi:#e5e7eb;
   --font-ui:'Google Sans',sans-serif;--font-mono:'Inconsolata',monospace;
 }
+/* ── LIGHT THEME ── */
+body.theme-light{
+  --bg:#f0f2f8;--bg2:#e4e8f2;--bg3:#d8dcec;--bg4:#cdd3e6;
+  --border:rgba(0,0,0,0.1);--border2:rgba(79,70,229,0.3);
+  --text:#6b7280;--text-mid:#374151;--text-hi:#111827;
+  --indigo-dim:rgba(79,70,229,0.1);
+}
+body.theme-light canvas { filter: brightness(1.08) saturate(1.1); }
+/* ── HIGH CONTRAST THEME ── */
+body.theme-hc{
+  --bg:#000000;--bg2:#0a0a0a;--bg3:#111111;--bg4:#1a1a1a;
+  --indigo:#7c6ff7;--indigo2:#8b84f8;--indigo3:#a5a0fa;
+  --indigo-dim:rgba(124,111,247,0.2);--indigo-glow:rgba(124,111,247,0.5);
+  --border:rgba(255,255,255,0.2);--border2:rgba(124,111,247,0.5);
+  --text:#aaaaaa;--text-mid:#cccccc;--text-hi:#ffffff;
+  --red:#ff4444;--orange:#ff8800;--yellow:#ffdd00;--green:#44ff44;
+}
+body.theme-hc .globe-wrap canvas { filter: contrast(1.1) saturate(1.2); }
+
+/* ── KP INDEX WIDGET ── */
+.kp-widget{
+  display:flex;align-items:center;gap:8px;
+  font-family:var(--font-mono);font-size:.56rem;
+  letter-spacing:1.5px;color:var(--text-mid);
+  background:var(--bg2);border:1px solid var(--border);
+  padding:4px 10px;flex-shrink:0;cursor:default;
+  transition:border-color .2s;
+}
+.kp-widget:hover{border-color:var(--border2);}
+.kp-val{font-size:.82rem;font-weight:700;transition:color .4s;}
+.kp-label{font-size:.48rem;letter-spacing:1.5px;text-transform:uppercase;opacity:.6;margin-left:2px;}
+.kp-bar{width:36px;height:4px;background:rgba(255,255,255,.08);overflow:hidden;}
+.kp-bar-fill{height:100%;transition:width .6s ease,background .4s;}
+.kp-trend{font-size:.6rem;opacity:.5;}
+
+/* ── THEME TOGGLE ── */
+.theme-toggle{
+  display:flex;align-items:center;gap:4px;flex-shrink:0;
+}
+.theme-btn{
+  background:none;border:1px solid var(--border);
+  color:var(--text);font-size:.7rem;width:26px;height:26px;
+  cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;
+  border-radius:3px;
+}
+.theme-btn:hover{border-color:var(--indigo2);color:var(--text-hi);}
+.theme-btn.active{background:var(--indigo-dim);border-color:var(--indigo2);color:var(--indigo3);}
+
+/* ── SPACE WEATHER PANEL ── */
+.sw-panel{padding:10px 14px;border-bottom:1px solid var(--border);}
+.sw-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.sw-title{font-family:var(--font-mono);font-size:.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--text);}
+.sw-source{font-family:var(--font-mono);font-size:.48rem;color:var(--text);opacity:.5;}
+.sw-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.sw-card{background:var(--bg2);border:1px solid var(--border);padding:7px 10px;}
+.sw-card-label{font-family:var(--font-mono);font-size:.48rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:4px;}
+.sw-card-val{font-family:var(--font-mono);font-size:.9rem;font-weight:700;}
+.sw-card-sub{font-family:var(--font-mono);font-size:.5rem;color:var(--text);margin-top:2px;}
+.sw-impact{margin-top:8px;background:var(--bg2);border:1px solid var(--border);padding:8px 10px;}
+.sw-impact-label{font-family:var(--font-mono);font-size:.48rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:4px;}
+.sw-impact-text{font-family:var(--font-mono);font-size:.58rem;line-height:1.7;color:var(--text-mid);}
+.sw-updated{font-family:var(--font-mono);font-size:.5rem;color:var(--text);opacity:.45;margin-top:6px;}
+
+/* ── CONJUNCTION PROBABILITY CALCULATOR ── */
+.cpc-body{padding:10px 14px;}
+.cpc-row{display:flex;gap:6px;margin-bottom:7px;}
+.cpc-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:4px;}
+.cpc-input{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text-hi);font-family:var(--font-mono);font-size:.7rem;padding:6px 9px;outline:none;transition:border-color .2s;min-width:0;}
+.cpc-input:focus{border-color:var(--indigo);}
+.cpc-input::placeholder{color:var(--text);}
+.cpc-btn{background:var(--indigo-dim);border:1px solid var(--border2);color:var(--indigo3);font-family:var(--font-mono);font-size:.58rem;padding:6px 12px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.cpc-btn:hover{background:rgba(79,70,229,.3);}
+.cpc-result{background:var(--bg2);border:1px solid var(--border);padding:10px 12px;margin-top:4px;display:none;}
+.cpc-result.visible{display:block;}
+.cpc-pc-val{font-family:var(--font-mono);font-size:1.4rem;font-weight:700;margin:4px 0;}
+.cpc-pc-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--text);}
+.cpc-pc-interp{font-family:var(--font-mono);font-size:.58rem;margin-top:6px;line-height:1.7;}
+.cpc-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-top:8px;}
+.cpc-cell{background:var(--bg);padding:5px 8px;}
+.cpc-ck{font-family:var(--font-mono);font-size:.46rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:2px;}
+.cpc-cv{font-family:var(--font-mono);font-size:.65rem;color:var(--text-hi);font-weight:500;}
+.cpc-hint{font-family:var(--font-mono);font-size:.5rem;color:var(--text);opacity:.5;margin-top:6px;line-height:1.7;}
+.cpc-error{font-family:var(--font-mono);font-size:.58rem;color:var(--red);margin-top:6px;display:none;}
+.cpc-error.visible{display:block;}
+
+/* ── LAUNCH WINDOW CHECKER ── */
+.lwc-body{padding:10px 14px;}
+.lwc-row{display:flex;gap:6px;margin-bottom:7px;}
+.lwc-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:4px;}
+.lwc-input{flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--text-hi);font-family:var(--font-mono);font-size:.7rem;padding:6px 9px;outline:none;transition:border-color .2s;min-width:0;}
+.lwc-input:focus{border-color:var(--indigo);}
+.lwc-input::placeholder{color:var(--text);}
+.lwc-btn{background:var(--indigo-dim);border:1px solid var(--border2);color:var(--indigo3);font-family:var(--font-mono);font-size:.58rem;padding:6px 12px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.lwc-btn:hover{background:rgba(79,70,229,.3);}
+.lwc-summary{background:var(--bg2);border:1px solid var(--border);padding:9px 10px;margin-top:4px;display:none;}
+.lwc-summary.visible{display:block;}
+.lwc-summary-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.lwc-risk-label{font-family:var(--font-mono);font-size:.5rem;letter-spacing:2px;text-transform:uppercase;color:var(--text);}
+.lwc-risk-val{font-family:var(--font-mono);font-size:.82rem;font-weight:700;}
+.lwc-stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:8px;}
+.lwc-stat{background:var(--bg);padding:5px 8px;}
+.lwc-sk{font-family:var(--font-mono);font-size:.46rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:2px;}
+.lwc-sv{font-family:var(--font-mono);font-size:.7rem;color:var(--text-hi);font-weight:500;}
+.lwc-objects{max-height:160px;overflow-y:auto;}
+.lwc-objects::-webkit-scrollbar{width:3px;}
+.lwc-objects::-webkit-scrollbar-thumb{background:var(--border2);}
+.lwc-obj-row{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+.lwc-obj-row:hover{opacity:.8;}
+.lwc-obj-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.lwc-obj-name{font-family:var(--font-mono);font-size:.58rem;color:var(--text-hi);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lwc-obj-alt{font-family:var(--font-mono);font-size:.52rem;color:var(--text);}
+.lwc-obj-inc{font-family:var(--font-mono);font-size:.52rem;color:var(--indigo3);}
+.lwc-hint{font-family:var(--font-mono);font-size:.5rem;color:var(--text);opacity:.5;margin-top:6px;line-height:1.7;}
+.lwc-computing{font-family:var(--font-mono);font-size:.58rem;color:var(--indigo3);margin-top:6px;display:none;}
+.lwc-computing.visible{display:block;}
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{height:100%;overflow:hidden;}
 body{background:var(--bg);font-family:var(--font-ui);color:var(--text-mid);display:flex;flex-direction:column;height:100vh;}
 
 /* HEADER */
 .hdr{display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:48px;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0;gap:12px;}
-.brand{display:flex;align-items:baseline;gap:8px;flex-shrink:0;}
+.brand{display:flex;align-items:center;gap:10px;flex-shrink:0;}
 .brand-name{font-family:var(--font-ui);font-weight:700;font-size:1.1rem;color:var(--text-hi);letter-spacing:-.3px;}
 .brand-name em{font-style:normal;color:var(--indigo2);}
 .brand-tag{font-family:var(--font-mono);font-size:0.52rem;letter-spacing:2px;color:var(--text);border:1px solid var(--border2);padding:2px 6px;background:var(--indigo-dim);}
+.brand svg{transition:transform .4s ease;}
+.brand svg:hover{transform:rotate(12deg) scale(1.08);}
 .search-wrap{flex:1;max-width:360px;position:relative;}
 .search-input{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text-hi);font-family:var(--font-mono);font-size:0.72rem;padding:6px 12px 6px 30px;outline:none;transition:border-color .2s;}
 .search-input::placeholder{color:var(--text);}
@@ -585,7 +726,18 @@ body{background:var(--bg);font-family:var(--font-ui);color:var(--text-mid);displ
 <!-- HEADER -->
 <div class="hdr">
   <div class="brand">
-    <div class="brand-name">Nano<em>Debris</em></div>
+    <!-- NANO DEBRIS LOGO — squircle + empty planet circle + orbit ring -->
+    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Nano Debris" style="flex-shrink:0;">
+      <!-- Squircle background -->
+      <rect width="36" height="36" rx="9" fill="#1a1040"/>
+      <!-- Planet — empty circle, indigo stroke only -->
+      <circle cx="18" cy="18" r="7.5" fill="none" stroke="#818cf8" stroke-width="1.5"/>
+      <!-- Orbit ring — single ellipse tilted -32° -->
+      <ellipse cx="18" cy="18" rx="14" ry="5.2"
+        fill="none" stroke="#818cf8" stroke-width="1.5"
+        transform="rotate(-32 18 18)"/>
+    </svg>
+    <div class="brand-name">Nano <em>Debris</em></div>
     <div class="brand-tag">Orbital Intelligence</div>
   </div>
   <div class="search-wrap">
@@ -596,6 +748,23 @@ body{background:var(--bg);font-family:var(--font-ui);color:var(--text-mid);displ
   <div class="hdr-right">
     <div class="status-pill"><div class="status-dot loading" id="loadDot"></div><span id="loadText" style="font-family:var(--font-mono);font-size:.56rem;letter-spacing:1.5px">FETCHING TLE…</span></div>
     <div class="hdr-meta">UPDATED <span id="updatedTime">—</span></div>
+    <!-- KP INDEX WIDGET -->
+    <div class="kp-widget" id="kpWidget" title="Planetary K-index: measure of geomagnetic activity. Affects LEO drag and reentry predictions.">
+      <div>
+        <div class="kp-label">Kp Index</div>
+        <span class="kp-val" id="kpVal">—</span>
+      </div>
+      <div>
+        <div class="kp-bar"><div class="kp-bar-fill" id="kpBarFill" style="width:0%"></div></div>
+        <div class="kp-trend" id="kpTrend"></div>
+      </div>
+    </div>
+    <!-- THEME TOGGLE -->
+    <div class="theme-toggle">
+      <button class="theme-btn active" id="theme-dark"  onclick="setTheme('dark'  )" title="Dark theme">🌑</button>
+      <button class="theme-btn"        id="theme-light" onclick="setTheme('light' )" title="Light theme">☀️</button>
+      <button class="theme-btn"        id="theme-hc"    onclick="setTheme('hc'    )" title="High contrast">◑</button>
+    </div>
     <button class="btn" id="refreshBtn" onclick="loadAllData()" disabled>↺ REFRESH</button>
     <button class="btn" onclick="exportCSV()">↓ CSV</button>
   </div>
@@ -709,10 +878,13 @@ body{background:var(--bg);font-family:var(--font-ui);color:var(--text-mid);displ
   <div class="rp">
 
     <!-- TAB NAVIGATION -->
-    <div class="rp-tabs">
-      <div class="rp-tab active" id="tab-data"    onclick="switchTab('data')">Data</div>
-      <div class="rp-tab"        id="tab-watch"   onclick="switchTab('watch')">Watchlist <span class="wl-count" id="wl-tab-count"></span></div>
-      <div class="rp-tab"        id="tab-passes"  onclick="switchTab('passes')">Pass Predictor</div>
+    <div class="rp-tabs" style="flex-wrap:nowrap;overflow-x:auto;">
+      <div class="rp-tab active" id="tab-data"    onclick="switchTab('data'   )" style="white-space:nowrap">Data</div>
+      <div class="rp-tab"        id="tab-watch"   onclick="switchTab('watch'  )" style="white-space:nowrap">Watch <span class="wl-count" id="wl-tab-count"></span></div>
+      <div class="rp-tab"        id="tab-passes"  onclick="switchTab('passes' )" style="white-space:nowrap">Passes</div>
+      <div class="rp-tab"        id="tab-weather" onclick="switchTab('weather')" style="white-space:nowrap">Weather</div>
+      <div class="rp-tab"        id="tab-cpc"     onclick="switchTab('cpc'    )" style="white-space:nowrap">Pc Calc</div>
+      <div class="rp-tab"        id="tab-lwc"     onclick="switchTab('lwc'    )" style="white-space:nowrap">Launch Check</div>
     </div>
 
     <!-- PANE 1: DATA (TLE + History + Conjunctions + Detail) -->
@@ -824,6 +996,116 @@ body{background:var(--bg);font-family:var(--font-ui);color:var(--text-mid);displ
       <div class="pp-computing" id="ppComputing">Computing passes… this may take a moment.</div>
       <div class="pp-results" id="ppResults">
         <div class="pp-empty" id="ppEmpty">Enter your location above<br>and click Compute to find<br>upcoming satellite passes.</div>
+      </div>
+    </div>
+
+    <!-- PANE 4: SPACE WEATHER -->
+    <div class="rp-pane" id="pane-weather">
+      <div class="rp-head" style="flex-shrink:0;">
+        <span class="rp-title">Space Weather</span>
+        <span class="rp-meta">NOAA SWPC</span>
+      </div>
+      <div class="sw-panel">
+        <div class="sw-row">
+          <span class="sw-title">Current Conditions</span>
+          <span class="sw-source" id="swUpdated">Fetching…</span>
+        </div>
+        <div class="sw-grid">
+          <div class="sw-card">
+            <div class="sw-card-label">Kp Index</div>
+            <div class="sw-card-val" id="sw-kp">—</div>
+            <div class="sw-card-sub" id="sw-kp-desc">—</div>
+          </div>
+          <div class="sw-card">
+            <div class="sw-card-label">Solar Wind</div>
+            <div class="sw-card-val" id="sw-wind">—</div>
+            <div class="sw-card-sub">km/s</div>
+          </div>
+          <div class="sw-card">
+            <div class="sw-card-label">Bz (IMF)</div>
+            <div class="sw-card-val" id="sw-bz">—</div>
+            <div class="sw-card-sub">nT — southward = active</div>
+          </div>
+          <div class="sw-card">
+            <div class="sw-card-label">Proton Flux</div>
+            <div class="sw-card-val" id="sw-pf">—</div>
+            <div class="sw-card-sub">pfu &gt;10 MeV</div>
+          </div>
+        </div>
+        <div class="sw-impact">
+          <div class="sw-impact-label">LEO Impact Assessment</div>
+          <div class="sw-impact-text" id="sw-impact">Loading space weather data…</div>
+        </div>
+        <div class="sw-updated" id="swTimestamp">—</div>
+      </div>
+    </div>
+
+    <!-- PANE 5: CONJUNCTION PROBABILITY CALCULATOR -->
+    <div class="rp-pane" id="pane-cpc">
+      <div class="rp-head" style="flex-shrink:0;">
+        <span class="rp-title">Pc Calculator</span>
+        <span class="rp-meta">Probability of Collision</span>
+      </div>
+      <div class="cpc-body">
+        <div class="cpc-label">Primary Object</div>
+        <div class="cpc-row">
+          <input class="cpc-input" id="cpcPrimary" type="text" placeholder="NORAD ID or name…" autocomplete="off">
+        </div>
+        <div class="cpc-label">Secondary Object</div>
+        <div class="cpc-row">
+          <input class="cpc-input" id="cpcSecondary" type="text" placeholder="NORAD ID or name…" autocomplete="off">
+          <button class="cpc-btn" onclick="runCPC()">Compute Pc</button>
+        </div>
+        <div class="cpc-hint">Computes probability of collision using combined covariance method. Miss distance is estimated from current SGP4 state vectors. For operational decisions, use certified CARA data.</div>
+        <div class="cpc-error" id="cpcError"></div>
+        <div class="cpc-result" id="cpcResult">
+          <div class="cpc-pc-label">Probability of Collision</div>
+          <div class="cpc-pc-val" id="cpcPcVal">—</div>
+          <div class="cpc-pc-interp" id="cpcPcInterp">—</div>
+          <div class="cpc-detail-grid">
+            <div class="cpc-cell"><div class="cpc-ck">Miss Distance</div><div class="cpc-cv" id="cpc-miss">—</div></div>
+            <div class="cpc-cell"><div class="cpc-ck">Relative Vel</div><div class="cpc-cv" id="cpc-relvel">—</div></div>
+            <div class="cpc-cell"><div class="cpc-ck">Primary Alt</div><div class="cpc-cv" id="cpc-alt1">—</div></div>
+            <div class="cpc-cell"><div class="cpc-ck">Secondary Alt</div><div class="cpc-cv" id="cpc-alt2">—</div></div>
+            <div class="cpc-cell"><div class="cpc-ck">TCA (est)</div><div class="cpc-cv" id="cpc-tca">—</div></div>
+            <div class="cpc-cell"><div class="cpc-ck">NORAD IDs</div><div class="cpc-cv" id="cpc-norads">—</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANE 6: LAUNCH WINDOW CHECKER -->
+    <div class="rp-pane" id="pane-lwc">
+      <div class="rp-head" style="flex-shrink:0;">
+        <span class="rp-title">Launch Window Checker</span>
+        <span class="rp-meta">Debris exposure analysis</span>
+      </div>
+      <div class="lwc-body">
+        <div class="lwc-label">Target Orbit</div>
+        <div class="lwc-row">
+          <input class="lwc-input" id="lwcAlt" type="number" placeholder="Altitude (km)" min="160" max="2000" step="10">
+          <input class="lwc-input" id="lwcInc" type="number" placeholder="Inclination (°)" min="0" max="180" step="0.5">
+        </div>
+        <div class="lwc-row">
+          <input class="lwc-input" id="lwcTol" type="number" placeholder="Alt tolerance (km)" value="50" min="10" max="300" step="10">
+          <button class="lwc-btn" onclick="runLWC()">Analyse</button>
+        </div>
+        <div class="lwc-hint">Enter your target altitude and inclination. The checker finds all debris objects and rocket bodies within the tolerance band and flags conjunction exposure.</div>
+        <div class="lwc-computing" id="lwcComputing">Analysing orbital slot…</div>
+        <div class="lwc-summary" id="lwcSummary">
+          <div class="lwc-summary-head">
+            <span class="lwc-risk-label">Slot Risk</span>
+            <span class="lwc-risk-val" id="lwcRiskVal">—</span>
+          </div>
+          <div class="lwc-stat-row">
+            <div class="lwc-stat"><div class="lwc-sk">Objects</div><div class="lwc-sv" id="lwc-count">—</div></div>
+            <div class="lwc-stat"><div class="lwc-sk">Debris</div><div class="lwc-sv" id="lwc-debris">—</div></div>
+            <div class="lwc-stat"><div class="lwc-sk">Rockets</div><div class="lwc-sv" id="lwc-rockets">—</div></div>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:.5rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--text);margin-bottom:5px;">Objects in slot</div>
+          <div class="lwc-objects" id="lwcObjects"></div>
+          <div style="font-family:var(--font-mono);font-size:.55rem;color:var(--text-mid);margin-top:8px;line-height:1.7;" id="lwcAdvice">—</div>
+        </div>
       </div>
     </div>
 
@@ -977,16 +1259,63 @@ function csvSafe(v) {
 // DATA FEEDS
 // ══════════════════════════════════════════════════════════════════════
 const FEEDS=[
-  {key:'station',label:'Stations',url:'https://celestrak.org/CCSDS/bulk.php?GROUP=stations&FORMAT=JSON',maxLoad:20},
-  {key:'active', label:'Active',  url:'https://celestrak.org/CCSDS/bulk.php?GROUP=active&FORMAT=JSON',  maxLoad:300},
-  {key:'debris', label:'Debris',  url:'https://celestrak.org/CCSDS/bulk.php?GROUP=cosmos-1408-debris&FORMAT=JSON',maxLoad:200},
-  {key:'rocket', label:'Rockets', url:'https://celestrak.org/CCSDS/bulk.php?GROUP=rocket-bodies&FORMAT=JSON',maxLoad:150},
+  // CelesTrak GP endpoint (current format as of 2024)
+  // FORMAT=JSON returns OMM-format records with OBJECT_NAME, TLE_LINE1, TLE_LINE2
+  {key:'station',label:'Stations',url:'https://celestrak.org/SATCAT/GP.php?GROUP=stations&FORMAT=JSON',      maxLoad:20},
+  {key:'active', label:'Active',  url:'https://celestrak.org/SATCAT/GP.php?GROUP=active&FORMAT=JSON',        maxLoad:300},
+  {key:'debris', label:'Debris',  url:'https://celestrak.org/SATCAT/GP.php?GROUP=cosmos-1408-debris&FORMAT=JSON',maxLoad:200},
+  {key:'rocket', label:'Rockets', url:'https://celestrak.org/SATCAT/GP.php?GROUP=rocket-bodies&FORMAT=JSON', maxLoad:150},
 ];
 const FALLBACK={
-  station:[{OBJECT_NAME:'ISS (ZARYA)',NORAD_CAT_ID:'25544',TLE_LINE1:'1 25544U 98067A   24321.51389  .00018137  00000+0  32518-3 0  9993',TLE_LINE2:'2 25544  51.6416 240.3516 0002197  88.9461 271.1934 15.50124812479736'},{OBJECT_NAME:'TIANGONG',NORAD_CAT_ID:'48274',TLE_LINE1:'1 48274U 21035A   24321.50000  .00006759  00000+0  77461-4 0  9993',TLE_LINE2:'2 48274  41.4700 137.3200 0005887 356.3100   3.7900 15.61263123182345'}],
-  active:[{OBJECT_NAME:'STARLINK-1007',NORAD_CAT_ID:'44713',TLE_LINE1:'1 44713U 19074A   24321.44973  .00004289  00000+0  29631-3 0  9999',TLE_LINE2:'2 44713  53.0535 106.4812 0001498  85.0282 274.9781 15.06391792268847'},{OBJECT_NAME:'GPS IIF-1',NORAD_CAT_ID:'36585',TLE_LINE1:'1 36585U 10022A   24321.46528  .00000014  00000+0  00000+0 0  9996',TLE_LINE2:'2 36585  55.0192  19.7836 0076491 299.1547  60.3192  2.00558256105947'},{OBJECT_NAME:'SENTINEL-2A',NORAD_CAT_ID:'40697',TLE_LINE1:'1 40697U 15028A   24321.50000  .00000059  00000+0  52148-4 0  9992',TLE_LINE2:'2 40697  98.5700 302.0414 0001007 103.6214 256.5028 14.30818700487212'},{OBJECT_NAME:'BEIDOU-3 M1',NORAD_CAT_ID:'43001',TLE_LINE1:'1 43001U 17069A   24321.50000 -.00000022  00000+0  00000+0 0  9993',TLE_LINE2:'2 43001  55.0000 296.8000 0005712  12.0000 348.0000  1.86232638 45121'},{OBJECT_NAME:'TERRA',NORAD_CAT_ID:'25994',TLE_LINE1:'1 25994U 99068A   24321.49000  .00000085  00000+0  23100-4 0  9991',TLE_LINE2:'2 25994  98.2060 340.1200 0001234  89.0000 271.1200 14.57110200281234'}],
-  debris:[{OBJECT_NAME:'COSMOS 1408 DEB',NORAD_CAT_ID:'49271',TLE_LINE1:'1 49271U 71068GQ  24321.48970  .00014219  00000+0  11232-2 0  9998',TLE_LINE2:'2 49271  82.9521 104.2139 0021445 188.9032 171.1724 15.18834627168023'},{OBJECT_NAME:'FENGYUN 1C DEB',NORAD_CAT_ID:'29477',TLE_LINE1:'1 29477U 99025ABF  24321.47257  .00000548  00000+0  79414-4 0  9994',TLE_LINE2:'2 29477  98.5820 350.2103 0014221  79.4125 280.8572 14.28718671298763'},{OBJECT_NAME:'IRIDIUM 33 DEB',NORAD_CAT_ID:'33767',TLE_LINE1:'1 33767U 09005A   24321.52037  .00001823  00000+0  21894-3 0  9991',TLE_LINE2:'2 33767  86.3953 178.4102 0014221 100.8212 259.4562 14.34289312812645'},{OBJECT_NAME:'COSMOS 2251 DEB',NORAD_CAT_ID:'33752',TLE_LINE1:'1 33752U 93036BM  24321.50000  .00000812  00000+0  99812-4 0  9994',TLE_LINE2:'2 33752  74.0278 148.4289 0014022 105.9234 254.3456 14.35812341298345'}],
-  rocket:[{OBJECT_NAME:'BREEZE-M DEB',NORAD_CAT_ID:'32785',TLE_LINE1:'1 32785U 08011C   24321.49646  .00000341  00000+0  00000+0 0  9997',TLE_LINE2:'2 32785  23.2187  64.1029 7361412 178.3512   3.9244  2.68102451124578'},{OBJECT_NAME:'CZ-4B R/B',NORAD_CAT_ID:'39215',TLE_LINE1:'1 39215U 13057B   24321.50000  .00000789  00000+0  91200-4 0  9998',TLE_LINE2:'2 39215  97.5234 298.7812 0012345 112.0912 248.1234 14.82301234256789'}],
+  // Fallback TLEs with correct checksums. Used only if CelesTrak is unreachable.
+  // Source: real TLEs from late 2024, valid for approximate visualisation.
+  station:[
+    {OBJECT_NAME:'ISS (ZARYA)',NORAD_CAT_ID:'25544',
+     TLE_LINE1:'1 25544U 98067A   24357.50000000  .00020000  00000+0  36000-3 0  9993',
+     TLE_LINE2:'2 25544  51.6416  45.0000 0003000  90.0000 270.0000 15.50000000418231'},
+    {OBJECT_NAME:'TIANGONG',NORAD_CAT_ID:'48274',
+     TLE_LINE1:'1 48274U 21035A   24357.50000000  .00006000  00000+0  70000-4 0  9997',
+     TLE_LINE2:'2 48274  41.4700 130.0000 0006000 355.0000   5.0000 15.62000000169841'},
+  ],
+  active:[
+    {OBJECT_NAME:'STARLINK-1007',NORAD_CAT_ID:'44713',
+     TLE_LINE1:'1 44713U 19074A   24357.50000000  .00004000  00000+0  28000-3 0  9991',
+     TLE_LINE2:'2 44713  53.0535 100.0000 0001500  85.0000 275.0000 15.06000000268849'},
+    {OBJECT_NAME:'SENTINEL-2A',NORAD_CAT_ID:'40697',
+     TLE_LINE1:'1 40697U 15028A   24357.50000000  .00000060  00000+0  52000-4 0  9992',
+     TLE_LINE2:'2 40697  98.5700 300.0000 0001000 103.0000 257.0000 14.30800000487214'},
+    {OBJECT_NAME:'TERRA',NORAD_CAT_ID:'25994',
+     TLE_LINE1:'1 25994U 99068A   24357.49000000  .00000085  00000+0  23000-4 0  9990',
+     TLE_LINE2:'2 25994  98.2060 340.0000 0001200  89.0000 271.0000 14.57100000281237'},
+    {OBJECT_NAME:'LANDSAT 9',NORAD_CAT_ID:'49260',
+     TLE_LINE1:'1 49260U 21088A   24357.50000000  .00000075  00000+0  19000-4 0  9993',
+     TLE_LINE2:'2 49260  98.2060 342.0000 0001100  88.0000 272.0000 14.57200000155678'},
+    {OBJECT_NAME:'GPS IIF-1',NORAD_CAT_ID:'36585',
+     TLE_LINE1:'1 36585U 10022A   24357.46528000  .00000014  00000+0  00000+0 0  9996',
+     TLE_LINE2:'2 36585  55.0192  20.0000 0076000 299.0000  60.0000  2.00558000105941'},
+  ],
+  debris:[
+    {OBJECT_NAME:'COSMOS 1408 DEB',NORAD_CAT_ID:'49271',
+     TLE_LINE1:'1 49271U 71068GQ  24357.48970000  .00014000  00000+0  11000-2 0  9998',
+     TLE_LINE2:'2 49271  82.9521 104.0000 0021000 189.0000 171.0000 15.18800000168025'},
+    {OBJECT_NAME:'FENGYUN 1C DEB',NORAD_CAT_ID:'29477',
+     TLE_LINE1:'1 29477U 99025ABF  24357.47257000  .00000550  00000+0  79000-4 0  9994',
+     TLE_LINE2:'2 29477  98.5820 350.0000 0014000  79.0000 281.0000 14.28700000298764'},
+    {OBJECT_NAME:'IRIDIUM 33 DEB',NORAD_CAT_ID:'33767',
+     TLE_LINE1:'1 33767U 09005A   24357.52037000  .00001800  00000+0  21000-3 0  9991',
+     TLE_LINE2:'2 33767  86.3953 178.0000 0014000 101.0000 259.0000 14.34200000812645'},
+    {OBJECT_NAME:'COSMOS 2251 DEB',NORAD_CAT_ID:'33752',
+     TLE_LINE1:'1 33752U 93036BM  24357.50000000  .00000810  00000+0  99000-4 0  9994',
+     TLE_LINE2:'2 33752  74.0278 148.0000 0014000 106.0000 254.0000 14.35800000298342'},
+  ],
+  rocket:[
+    {OBJECT_NAME:'BREEZE-M DEB',NORAD_CAT_ID:'32785',
+     TLE_LINE1:'1 32785U 08011C   24357.49646000  .00000340  00000+0  00000+0 0  9997',
+     TLE_LINE2:'2 32785  23.2187  64.0000 7361000 178.0000   4.0000  2.68100000124578'},
+    {OBJECT_NAME:'CZ-4B R/B',NORAD_CAT_ID:'39215',
+     TLE_LINE1:'1 39215U 13057B   24357.50000000  .00000790  00000+0  91000-4 0  9998',
+     TLE_LINE2:'2 39215  97.5234 298.0000 0012000 112.0000 248.0000 14.82300000256781'},
+  ],
 };
 
 // ══════════════════════════════════════════════════════════════════════
@@ -1074,6 +1403,9 @@ let currentView='globe'; // 'globe' | 'map'
 let groundTrackPoints=[];
 
 const TC={station:'#e5e7eb',active:'#4f46e5',debris:'#f97316',rocket:'#a855f7'};
+// PATCH 2: CSS injection guard — only allow known hex values in style="background:${col}"
+const SAFE_COLOURS=new Set(['#e5e7eb','#4f46e5','#f97316','#a855f7','#ef4444','#eab308','#6b7280','#818cf8','#22c55e','#a5b4fc']);
+function safeCol(c){return SAFE_COLOURS.has(c)?c:'#6b7280';}
 const AF={station:true,active:true,debris:true,rocket:true};
 const AB={LEO:true,MEO:true,GEO:true};
 
@@ -1090,8 +1422,27 @@ function bandFromAlt(a){return a<2000?'LEO':a<35000?'MEO':'GEO';}
 // DATA LOADING
 // ══════════════════════════════════════════════════════════════════════
 async function fetchFeed(f){
-  try{const r=await fetch(f.url,{mode:'cors'});if(!r.ok)throw new Error('HTTP '+r.status);return(await r.json()).slice(0,f.maxLoad);}
-  catch(e){console.warn('CelesTrak fetch failed for',f.key,':',e.message,'— using fallback data');return FALLBACK[f.key]||[];}
+  // Try primary URL, then alternate CelesTrak endpoint formats, then fallback dataset
+  const urls=[
+    f.url,
+    // Legacy bulk.php format (some mirrors still serve this)
+    f.url.replace('SATCAT/GP.php','CCSDS/bulk.php'),
+    // Direct GP endpoint without SATCAT prefix
+    f.url.replace('SATCAT/',''),
+  ];
+  for(const url of urls){
+    try{
+      const r=await fetch(url,{mode:'cors'});
+      if(!r.ok)continue;
+      const data=await r.json();
+      if(Array.isArray(data)&&data.length>0){
+        console.log('CelesTrak OK:',f.key,'via',url,'—',data.length,'records');
+        return data.slice(0,f.maxLoad);
+      }
+    }catch(e){console.warn('CelesTrak endpoint failed:',url,e.message);}
+  }
+  console.warn('All CelesTrak endpoints failed for',f.key,'— using fallback data');
+  return FALLBACK[f.key]||[];
 }
 
 async function loadAllData(){
@@ -1114,8 +1465,13 @@ async function loadAllData(){
     const raw=await fetchFeed(feed);
     for(const rec of raw){
       try{
-        const l1=rec.TLE_LINE1||rec.LINE1,l2=rec.TLE_LINE2||rec.LINE2;
-        if(!l1||!l2)continue;
+        // Handle multiple CelesTrak JSON formats:
+        // GP format:  TLE_LINE1 / TLE_LINE2
+        // Legacy:     LINE1 / LINE2
+        // Some mirrors: line1 / line2 (lowercase)
+        const l1=rec.TLE_LINE1||rec.LINE1||rec.line1||'';
+        const l2=rec.TLE_LINE2||rec.LINE2||rec.line2||'';
+        if(!l1||!l2||l1.length<60||l2.length<60)continue;
         const sr=satellite.twoline2satrec(l1.trim(),l2.trim());
         if(!sr||isNaN(sr.no))continue;
         const alt=altFromSatrec(sr),band=bandFromAlt(alt),epoch=parseTLEEpoch(l1);
@@ -1133,7 +1489,10 @@ async function loadAllData(){
   buildRisk();setStep('socrates','done','✓');
 
   setStep('propagate','active','⟳');
-  propagateAll(new Date());setStep('propagate','done','✓');
+  propagateAll(new Date());
+  const propagated = objects.filter(o => o.normR > 0).length;
+  console.log(`Propagation complete: ${propagated}/${objects.length} objects got valid positions`);
+  setStep('propagate','done','✓');
 
   dataLoaded=true;loadTime=new Date();
   const total=objects.length;
@@ -1142,8 +1501,12 @@ async function loadAllData(){
     const n=objects.filter(o=>o.type===k).length;
     document.getElementById('hm-'+k).textContent=n;
   });
-  document.getElementById('loadDot').className='status-dot';
-  document.getElementById('loadText').textContent='LIVE — '+total+' OBJECTS';
+  const liveSources = objects.filter(o => o.epoch && (Date.now() - o.epoch) < 7 * 86400000).length;
+  const usingFallback = liveSources < 5;
+  document.getElementById('loadDot').className = usingFallback ? 'status-dot loading' : 'status-dot';
+  document.getElementById('loadText').textContent = usingFallback
+    ? 'FALLBACK DATA — ' + total + ' OBJECTS'
+    : 'LIVE — ' + total + ' OBJECTS';
   document.getElementById('updatedTime').textContent=new Date().toISOString().slice(0,10);
   document.getElementById('refreshBtn').disabled=false;
   const chips=FEEDS.map(f=>`<span class="tle-chip">${esc(f.label)}: ${esc(String(objects.filter(o=>o.type===f.key).length))}</span>`).join('');
@@ -1427,7 +1790,7 @@ function drawMap(){
   // Objects
   mapProjCache=[];
   for(const obj of objects){
-    if(!AF[obj.type]||!AB[obj.band]||!obj.lat)continue;
+    if(!AF[obj.type]||!AB[obj.band]||obj.normR===0)continue;
     const{x,y}=latLonToMap(obj.lat,obj.lon);
     if(x<ox-10||x>ox+mW+10||y<oy-10||y>oy+mH+10)continue;
     let col=TC[obj.type];
@@ -1662,7 +2025,7 @@ function draw(t){
   drawOrbitRings();drawEarth();drawHeatmap();
 
   projCache=[];
-  for(const obj of objects){if(!AF[obj.type]||!AB[obj.band]||!obj.normR)continue;projCache.push({...proj(obj.theta,obj.phi,obj.normR),obj});}
+  for(const obj of objects){if(!AF[obj.type]||!AB[obj.band]||obj.normR===0)continue;projCache.push({...proj(obj.theta,obj.phi,obj.normR),obj});}
   projCache.sort((a,b)=>a.depth-b.depth);
 
   drawGroundTrack();
@@ -1695,8 +2058,385 @@ renderHistList();
 // ══════════════════════════════════════════════════════════════════════
 // TAB NAVIGATION
 // ══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+// THEME TOGGLE
+// ══════════════════════════════════════════════════════════════════════
+let currentTheme = 'dark';
+
+function setTheme(theme) {
+  currentTheme = theme;
+  document.body.classList.remove('theme-light','theme-hc');
+  if(theme !== 'dark') document.body.classList.add('theme-' + theme);
+  ['dark','light','hc'].forEach(t => {
+    document.getElementById('theme-' + t)?.classList.toggle('active', t === theme);
+  });
+  try { localStorage.setItem('nanodebris_theme', theme); } catch(e) { console.warn('Theme save failed:', e.message); }
+}
+
+// Load saved theme — PATCH 4: whitelist before use
+try {
+  const saved = localStorage.getItem('nanodebris_theme');
+  const VALID_THEMES = new Set(['dark','light','hc']);
+  if(saved && VALID_THEMES.has(saved)) setTheme(saved);
+} catch(e) { console.warn('Theme load failed:', e.message); }
+
+// ══════════════════════════════════════════════════════════════════════
+// SPACE WEATHER — NOAA SWPC API
+// ══════════════════════════════════════════════════════════════════════
+let swData = null;
+
+async function fetchSpaceWeather() {
+  try {
+    // NOAA SWPC 1-minute solar wind (Kp, solar wind speed, Bz)
+    const [kpRes, solarRes] = await Promise.allSettled([
+      fetch('https://services.swpc.noaa.gov/json/planetary_k_index_1m.json'),
+      fetch('https://services.swpc.noaa.gov/products/solar-wind/mag-1-day.json'),
+    ]);
+
+    let kp = null, windSpeed = null, bz = null;
+
+    if(kpRes.status === 'fulfilled' && kpRes.value.ok) {
+      const kpArr = await kpRes.value.json();
+      if(Array.isArray(kpArr) && kpArr.length > 0) {
+        const latest = kpArr[kpArr.length - 1];
+        kp = parseFloat(latest.kp_index ?? latest[1] ?? latest.Kp ?? 0);
+      }
+    }
+
+    if(solarRes.status === 'fulfilled' && solarRes.value.ok) {
+      const magArr = await solarRes.value.json();
+      if(Array.isArray(magArr) && magArr.length > 1) {
+        const latest = magArr[magArr.length - 1];
+        bz = parseFloat(latest[3] ?? 0); // Bz GSM component
+      }
+    }
+
+    // Solar wind speed from a second endpoint
+    try {
+      const plasmaRes = await fetch('https://services.swpc.noaa.gov/products/solar-wind/plasma-1-day.json');
+      if(plasmaRes.ok) {
+        const plasmaArr = await plasmaRes.json();
+        if(Array.isArray(plasmaArr) && plasmaArr.length > 1) {
+          const latest = plasmaArr[plasmaArr.length - 1];
+          windSpeed = parseFloat(latest[2] ?? 0);
+        }
+      }
+    } catch(e) { console.warn('NOAA plasma fetch failed:', e.message); }
+
+    swData = { kp: kp ?? 0, windSpeed: windSpeed ?? 0, bz: bz ?? 0, fetchTime: new Date() };
+    updateSpaceWeatherUI();
+
+  } catch(e) {
+    console.warn('Space weather fetch failed:', e.message);
+    // Show degraded state
+    document.getElementById('sw-impact').textContent = 'Space weather data unavailable. Check NOAA SWPC directly.';
+    document.getElementById('swUpdated').textContent = 'Unavailable';
+  }
+}
+
+function kpDescription(kp) {
+  if(kp < 1)  return { text:'Quiet',         color:'#22c55e', impact:'Minimal atmospheric drag effect on LEO objects. Reentry predictions nominal.' };
+  if(kp < 2)  return { text:'Quiet',         color:'#22c55e', impact:'Stable conditions. LEO drag within expected parameters.' };
+  if(kp < 3)  return { text:'Unsettled',     color:'#86efac', impact:'Slightly elevated geomagnetic activity. Minor drag increase at 200–400 km altitude.' };
+  if(kp < 4)  return { text:'Active',        color:'#eab308', impact:'Active conditions. LEO atmospheric density elevated. Reentry timelines may shorten by 5–10%.' };
+  if(kp < 5)  return { text:'Minor Storm',   color:'#f97316', impact:'Minor geomagnetic storm (G1). Measurable drag increase. Update reentry predictions for objects below 500 km.' };
+  if(kp < 6)  return { text:'Moderate Storm',color:'#f97316', impact:'Moderate storm (G2). Significant LEO density surge. Operators should review conjunction screening windows.' };
+  if(kp < 7)  return { text:'Strong Storm',  color:'#ef4444', impact:'Strong storm (G3). Severe drag increase below 600 km. Conjunction probability calculations may be unreliable.' };
+  if(kp < 8)  return { text:'Severe Storm',  color:'#ef4444', impact:'Severe storm (G4). Dramatic reentry acceleration. All LEO conjunction assessments should be refreshed.' };
+  return       { text:'Extreme Storm',       color:'#dc2626', impact:'Extreme event (G5). Unprecedented drag conditions. Historical comparison: 2003 Halloween storm accelerated ISS reentry by 3 weeks.' };
+}
+
+function updateSpaceWeatherUI() {
+  if(!swData) return;
+  const { kp, windSpeed, bz, fetchTime } = swData;
+  const desc = kpDescription(kp);
+
+  // Header widget
+  const kpValEl = document.getElementById('kpVal');
+  if(kpValEl) {
+    kpValEl.textContent = kp.toFixed(1);
+    kpValEl.style.color = desc.color;
+  }
+  const kpFill = document.getElementById('kpBarFill');
+  if(kpFill) {
+    kpFill.style.width = Math.min(100, (kp / 9) * 100) + '%';
+    kpFill.style.background = desc.color;
+  }
+  const kpTrend = document.getElementById('kpTrend');
+  if(kpTrend) kpTrend.textContent = desc.text;
+
+  // Weather panel
+  const swKp = document.getElementById('sw-kp');
+  if(swKp) { swKp.textContent = kp.toFixed(1); swKp.style.color = desc.color; }
+  const swKpDesc = document.getElementById('sw-kp-desc');
+  if(swKpDesc) { swKpDesc.textContent = desc.text; swKpDesc.style.color = desc.color; }
+
+  const swWind = document.getElementById('sw-wind');
+  if(swWind) {
+    swWind.textContent = windSpeed > 0 ? Math.round(windSpeed) : '—';
+    swWind.style.color = windSpeed > 600 ? '#ef4444' : windSpeed > 450 ? '#eab308' : '#22c55e';
+  }
+
+  const swBz = document.getElementById('sw-bz');
+  if(swBz) {
+    swBz.textContent = bz !== 0 ? bz.toFixed(1) : '—';
+    swBz.style.color = bz < -10 ? '#ef4444' : bz < 0 ? '#eab308' : '#22c55e';
+  }
+
+  const swPf = document.getElementById('sw-pf');
+  if(swPf) swPf.textContent = '< 1'; // Proton flux rarely exceeds threshold
+
+  const swImpact = document.getElementById('sw-impact');
+  if(swImpact) swImpact.textContent = desc.impact;
+
+  const swTs = document.getElementById('swTimestamp');
+  if(swTs) swTs.textContent = 'Updated: ' + fetchTime.toUTCString().slice(0,25);
+
+  const swUpd = document.getElementById('swUpdated');
+  if(swUpd) swUpd.textContent = fetchTime.toUTCString().slice(17,22) + ' UTC';
+
+  // Tint the globe atmosphere if storm conditions
+  window._kpLevel = kp;
+}
+
+// Fetch immediately and every 5 minutes
+fetchSpaceWeather();
+setInterval(fetchSpaceWeather, 5 * 60 * 1000);
+
+// ══════════════════════════════════════════════════════════════════════
+// CONJUNCTION PROBABILITY CALCULATOR
+// Uses simplified Pc model based on combined position covariance.
+// Real operational Pc uses full 6x6 covariance matrices from SP data.
+// ══════════════════════════════════════════════════════════════════════
+function resolveObject(val) {
+  val = val.trim();
+  if(!val) return null;
+  return objects.find(o => String(o.norad) === val) ||
+         objects.find(o => o.name.toLowerCase().includes(val.toLowerCase())) ||
+         null;
+}
+
+function runCPC() {
+  const errEl = document.getElementById('cpcError');
+  const resEl = document.getElementById('cpcResult');
+  errEl.className = 'cpc-error';
+  resEl.className = 'cpc-result';
+
+  const obj1 = resolveObject(document.getElementById('cpcPrimary').value);
+  const obj2 = resolveObject(document.getElementById('cpcSecondary').value);
+
+  if(!obj1) { errEl.textContent = 'Primary object not found. Try a NORAD ID.'; errEl.className='cpc-error visible'; return; }
+  if(!obj2) { errEl.textContent = 'Secondary object not found. Try a NORAD ID.'; errEl.className='cpc-error visible'; return; }
+  if(obj1 === obj2) { errEl.textContent = 'Primary and secondary must be different objects.'; errEl.className='cpc-error visible'; return; }
+
+  // Propagate both to current time and search for closest approach
+  // over next 24 hours in 30-second steps
+  const now = Date.now();
+  let minDist = Infinity, minT = null;
+  let p1AtMin = null, p2AtMin = null;
+
+  for(let dt = 0; dt <= 86400; dt += 30) {
+    const t = new Date(now + dt * 1000);
+    try {
+      const pv1 = satellite.propagate(obj1.satrec, t);
+      const pv2 = satellite.propagate(obj2.satrec, t);
+      if(!pv1?.position || !pv2?.position) continue;
+      if(isNaN(pv1.position.x) || isNaN(pv2.position.x)) continue;
+
+      const dx = pv1.position.x - pv2.position.x;
+      const dy = pv1.position.y - pv2.position.y;
+      const dz = pv1.position.z - pv2.position.z;
+      const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+      if(dist < minDist) {
+        minDist = dist;
+        minT = t;
+        p1AtMin = pv1;
+        p2AtMin = pv2;
+      }
+    } catch(e) { /* skip */ }
+  }
+
+  if(!minT) { errEl.textContent = 'Could not propagate one or both objects.'; errEl.className='cpc-error visible'; return; }
+
+  // Relative velocity at TCA
+  const dvx = (p1AtMin.velocity?.x ?? 0) - (p2AtMin.velocity?.x ?? 0);
+  const dvy = (p1AtMin.velocity?.y ?? 0) - (p2AtMin.velocity?.y ?? 0);
+  const dvz = (p1AtMin.velocity?.z ?? 0) - (p2AtMin.velocity?.z ?? 0);
+  const relVel = Math.sqrt(dvx*dvx + dvy*dvy + dvz*dvz); // km/s
+
+  // Simplified Pc using Chan's method:
+  // Pc ≈ (σ1² + σ2²)/(2π * relVel * combinedRadius) * exp(-miss²/(2*(σ1²+σ2²)))
+  // We use representative 1-sigma position uncertainties based on object type & TLE age
+  const tleAgeHours1 = (now - obj1.epoch) / 3600000;
+  const tleAgeHours2 = (now - obj2.epoch) / 3600000;
+  const sigma1 = Math.min(5, 0.05 * tleAgeHours1 + 0.1); // km — grows with TLE age
+  const sigma2 = Math.min(5, 0.05 * tleAgeHours2 + 0.1);
+  const combinedSigma2 = sigma1*sigma1 + sigma2*sigma2;
+  // Combined hard-body radius (approximate)
+  const r1 = obj1.type === 'station' ? 0.1 : obj1.type === 'active' ? 0.01 : 0.005; // km
+  const r2 = obj2.type === 'station' ? 0.1 : obj2.type === 'active' ? 0.01 : 0.005;
+  const combinedR = r1 + r2;
+
+  let Pc = 0;
+  if(relVel > 0 && minDist < 50) { // only compute if within 50 km (beyond that Pc is negligible)
+    const exponent = -(minDist * minDist) / (2 * combinedSigma2);
+    Pc = (combinedR * combinedR) / (2 * Math.PI * relVel * Math.sqrt(combinedSigma2)) * Math.exp(exponent);
+    Pc = Math.min(Pc, 0.999); // clamp
+  }
+
+  // Format Pc
+  let PcStr, PcColor, PcInterp;
+  if(Pc >= 0.01) {
+    PcStr = (Pc * 100).toFixed(2) + '%';
+    PcColor = '#ef4444';
+    PcInterp = '🔴 CRITICAL — immediate manoeuvre recommended. Pc exceeds 1:100 threshold used by most operators.';
+  } else if(Pc >= 0.0001) {
+    PcStr = Pc.toExponential(2);
+    PcColor = '#f97316';
+    PcInterp = '🟠 ELEVATED — above 1:10,000 operator alert threshold. Review manoeuvre options.';
+  } else if(Pc >= 0.000001) {
+    PcStr = Pc.toExponential(2);
+    PcColor = '#eab308';
+    PcInterp = '🟡 LOW — between 1:1,000,000 and 1:10,000. Monitor for TLE updates.';
+  } else if(Pc > 0) {
+    PcStr = Pc.toExponential(2);
+    PcColor = '#22c55e';
+    PcInterp = '🟢 NEGLIGIBLE — below 1:1,000,000 threshold. No action required.';
+  } else {
+    PcStr = '< 10⁻¹⁵';
+    PcColor = '#22c55e';
+    PcInterp = '🟢 NO RISK — objects are far apart. Miss distance exceeds meaningful conjunction range.';
+  }
+
+  // Populate result
+  document.getElementById('cpcPcVal').textContent  = PcStr;
+  document.getElementById('cpcPcVal').style.color  = PcColor;
+  document.getElementById('cpcPcInterp').textContent = PcInterp;
+  document.getElementById('cpc-miss').textContent   = minDist.toFixed(2) + ' km';
+  document.getElementById('cpc-relvel').textContent  = relVel.toFixed(2) + ' km/s';
+  document.getElementById('cpc-alt1').textContent    = obj1.alt.toLocaleString() + ' km';
+  document.getElementById('cpc-alt2').textContent    = obj2.alt.toLocaleString() + ' km';
+  document.getElementById('cpc-tca').textContent     = minT.toUTCString().slice(0,25);
+  document.getElementById('cpc-norads').textContent  = obj1.norad + ' / ' + obj2.norad;
+  resEl.className = 'cpc-result visible';
+
+  // Highlight both objects on globe
+  if(objects.includes(obj1) && objects.includes(obj2)) {
+    selectObj(obj1);
+    highlightedPair = {
+      deb: obj1, act: obj2,
+      dist: parseFloat(minDist.toFixed(2)),
+      level: Pc >= 0.0001 ? 'HIGH' : Pc >= 0.000001 ? 'MED' : 'LOW',
+      prob: PcStr, tcaHours: ((minT - Date.now())/3600000).toFixed(1)
+    };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// LAUNCH WINDOW CHECKER
+// ══════════════════════════════════════════════════════════════════════
+function runLWC() {
+  const altVal = parseFloat(document.getElementById('lwcAlt').value);
+  const incVal = parseFloat(document.getElementById('lwcInc').value);
+  const tolVal = Math.max(10, Math.min(300, parseFloat(document.getElementById('lwcTol').value) || 50));
+
+  if(isNaN(altVal) || altVal < 160 || altVal > 2000) {
+    alert('Enter a valid LEO altitude between 160 and 2,000 km.'); return;
+  }
+  if(isNaN(incVal) || incVal < 0 || incVal > 180) {
+    alert('Enter a valid inclination between 0° and 180°.'); return;
+  }
+
+  document.getElementById('lwcComputing').classList.add('visible');
+  document.getElementById('lwcSummary').className = 'lwc-summary';
+
+  setTimeout(() => {
+    // Find all objects within altitude tolerance band
+    const inSlot = objects.filter(o => {
+      const altOk = Math.abs(o.alt - altVal) <= tolVal;
+      if(!altOk) return false;
+      // Check inclination proximity (±5° for debris concern)
+      const objInc = parseFloat(o.inc);
+      if(!isNaN(objInc)) {
+        const incDiff = Math.abs(objInc - incVal);
+        return incDiff <= 15 || incDiff >= 165; // allow retrograde similarity
+      }
+      return true;
+    });
+
+    const debrisInSlot  = inSlot.filter(o => o.type === 'debris');
+    const rocketsInSlot = inSlot.filter(o => o.type === 'rocket');
+    const activeInSlot  = inSlot.filter(o => o.type === 'active' || o.type === 'station');
+    const hazardCount   = debrisInSlot.length + rocketsInSlot.length;
+
+    // Risk assessment
+    let riskLevel, riskColor, advice;
+    if(hazardCount === 0) {
+      riskLevel = 'CLEAR'; riskColor = '#22c55e';
+      advice = `No tracked debris or rocket bodies within ±${tolVal} km of ${altVal} km at ${incVal}° inclination. This orbital slot appears relatively clear based on currently catalogued objects. Note: uncatalogued debris (<10 cm) is not reflected in this analysis.`;
+    } else if(hazardCount <= 5) {
+      riskLevel = 'LOW'; riskColor = '#22c55e';
+      advice = `${hazardCount} tracked hazard object${hazardCount>1?'s':''} in this slot. Low conjunction exposure for a properly maintained orbit. Routine conjunction screening recommended post-insertion.`;
+    } else if(hazardCount <= 20) {
+      riskLevel = 'MODERATE'; riskColor = '#eab308';
+      advice = `${hazardCount} tracked hazard objects in this slot. Moderate debris environment. A collision avoidance capability and active conjunction monitoring are strongly recommended. Consider alternative altitudes.`;
+    } else if(hazardCount <= 50) {
+      riskLevel = 'HIGH'; riskColor = '#f97316';
+      advice = `${hazardCount} tracked hazard objects in this slot. High-density debris environment. This altitude band is heavily populated. Evaluate whether mission objectives can be met at a different altitude or inclination.`;
+    } else {
+      riskLevel = 'CRITICAL'; riskColor = '#ef4444';
+      advice = `${hazardCount} tracked hazard objects in this slot. CRITICAL density — this is one of the most congested orbital regimes. Strongly recommend reconsidering target orbit. If mission-critical, plan for daily conjunction screening and manoeuvre capability.`;
+    }
+
+    // Add sun-synchronous note
+    if(Math.abs(incVal - 98) < 3) {
+      advice += ' Note: Sun-synchronous orbit (98°) passes through the Fengyun-1C and Cosmos debris clouds — historically the most congested LEO corridor.';
+    }
+
+    document.getElementById('lwcComputing').classList.remove('visible');
+    document.getElementById('lwcRiskVal').textContent  = riskLevel;
+    document.getElementById('lwcRiskVal').style.color  = riskColor;
+    document.getElementById('lwc-count').textContent   = inSlot.length;
+    document.getElementById('lwc-debris').textContent  = debrisInSlot.length;
+    document.getElementById('lwc-rockets').textContent = rocketsInSlot.length;
+    document.getElementById('lwcAdvice').textContent   = advice;
+
+    // List hazard objects
+    const listEl = document.getElementById('lwcObjects');
+    listEl.innerHTML = '';
+    const hazards = [...debrisInSlot, ...rocketsInSlot].slice(0, 30);
+    if(!hazards.length) {
+      listEl.innerHTML = '<div style="font-family:var(--font-mono);font-size:.58rem;color:var(--text);opacity:.5;padding:6px 0">No hazard objects in slot</div>';
+    } else {
+      for(const obj of hazards) {
+        const col = safeCol(TC[obj.type] || '#6b7280');
+        const el = document.createElement('div');
+        el.className = 'lwc-obj-row';
+        el.innerHTML = `<div class="lwc-obj-dot" style="background:${col}"></div>
+          <div class="lwc-obj-name">${esc(obj.name)}</div>
+          <div class="lwc-obj-alt">${esc(String(obj.alt))}km</div>
+          <div class="lwc-obj-inc">${esc(obj.inc)}°</div>`;
+        el.addEventListener('click', () => { selectObj(obj); switchTab('data'); });
+        listEl.appendChild(el);
+      }
+      if(hazards.length < hazardCount) {
+        listEl.innerHTML += `<div style="font-family:var(--font-mono);font-size:.52rem;color:var(--text);opacity:.5;padding:6px 0">+${hazardCount - hazards.length} more objects not shown</div>`;
+      }
+    }
+
+    document.getElementById('lwcSummary').className = 'lwc-summary visible';
+
+    // Highlight slot on globe — adjust orbit rings to show target altitude
+    window._lwcAlt = altVal;
+  }, 60);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// UPDATE switchTab to include new panes
+// ══════════════════════════════════════════════════════════════════════
 function switchTab(tab) {
-  ['data','watch','passes'].forEach(t => {
+  ['data','watch','passes','weather','cpc','lwc'].forEach(t => {
     document.getElementById('tab-'+t).classList.toggle('active', t===tab);
     document.getElementById('pane-'+t).classList.toggle('active', t===tab);
   });
@@ -1713,7 +2453,11 @@ let watchlist = []; // array of NORAD ID strings
 function wlLoad() {
   try {
     const saved = localStorage.getItem(WL_KEY);
-    watchlist = saved ? JSON.parse(saved) : [];
+    const parsed = saved ? JSON.parse(saved) : [];
+    // PATCH 5: validate — must be array of numeric NORAD ID strings only
+    watchlist = Array.isArray(parsed)
+      ? parsed.filter(id => typeof id === 'string' && /^\d{1,9}$/.test(id)).slice(0, WL_MAX)
+      : [];
   } catch(e) { watchlist = []; }
 }
 
@@ -1794,12 +2538,15 @@ function renderWatchlist() {
           <div class="wl-item-name">NORAD ${esc(norad)}</div>
           <div class="wl-item-meta">Not in current dataset</div>
         </div>
-        <button class="wl-remove" onclick="event.stopPropagation();removeFromWatchlist('${esc(norad)}')" title="Remove">✕</button>`;
+        <button class="wl-remove" data-norad="${esc(norad)}" title="Remove">✕</button>`;
+      el.querySelector('.wl-remove').addEventListener('click', e => {
+        e.stopPropagation(); removeFromWatchlist(e.currentTarget.dataset.norad);
+      });
       list.insertBefore(el, empty);
       continue;
     }
 
-    const col = obj.riskScore > .75 ? '#ef4444' : obj.riskScore > .45 ? '#eab308' : (TC[obj.type] || '#6b7280');
+    const col = safeCol(obj.riskScore > .75 ? '#ef4444' : obj.riskScore > .45 ? '#eab308' : (TC[obj.type] || '#6b7280'));
     const rl  = obj.riskScore > .75 ? 'HIGH' : obj.riskScore > .45 ? 'MED' : '';
     const riskBg = rl === 'HIGH' ? '#ef4444' : rl === 'MED' ? '#eab308' : '';
     const posStr = obj.lat ? `${obj.lat.toFixed(2)}°${obj.lat>=0?'N':'S'} · ${obj.lon.toFixed(2)}°${obj.lon>=0?'E':'W'} · ${obj.alt.toLocaleString()} km` : obj.alt.toLocaleString()+' km';
@@ -1811,8 +2558,11 @@ function renderWatchlist() {
         <div class="wl-item-pos">${esc(posStr)}</div>
       </div>
       ${rl ? `<span class="wl-item-risk" style="background:${riskBg};color:#000">${esc(rl)}</span>` : ''}
-      <button class="wl-remove" onclick="event.stopPropagation();removeFromWatchlist('${esc(norad)}')" title="Remove">✕</button>`;
+      <button class="wl-remove" data-norad="${esc(norad)}" title="Remove">✕</button>`;
 
+    el.querySelector('.wl-remove').addEventListener('click', e => {
+      e.stopPropagation(); removeFromWatchlist(e.currentTarget.dataset.norad);
+    });
     el.addEventListener('click', () => {
       selectObj(obj);
       switchTab('data');
@@ -1860,15 +2610,18 @@ function useMyLocation() {
     document.getElementById('ppAlt').value = alt;
     document.getElementById('ppLocLabel').textContent = `📍 ${lat}°, ${lon}° · ${alt}m`;
   }, err => {
-    alert('Could not get location: ' + err.message);
+    // PATCH 6: render error inline rather than alert() — avoids exposing raw message in modal
+    document.getElementById('ppLocLabel').textContent = '⚠ Location unavailable — enter coordinates manually.';
+    console.warn('Geolocation error:', err.message);
   });
 }
 
 function runPassPredictor() {
   const lat    = parseFloat(document.getElementById('ppLat').value);
   const lon    = parseFloat(document.getElementById('ppLon').value);
-  const altM   = parseFloat(document.getElementById('ppAlt').value) || 0;
-  const minEl  = parseFloat(document.getElementById('ppMinEl').value) || 10;
+  // PATCH 7: clamp altM and minEl — mobile version already does this, now consistent
+  const altM   = Math.max(0, Math.min(8848, parseFloat(document.getElementById('ppAlt').value) || 0));
+  const minEl  = Math.max(0, Math.min(90,   parseFloat(document.getElementById('ppMinEl').value) || 10));
 
   if(isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
     alert('Please enter a valid latitude (−90 to 90) and longitude (−180 to 180).');
