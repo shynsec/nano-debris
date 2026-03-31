@@ -2,7 +2,7 @@
 
 A real-time space debris monitoring dashboard built as a single self-contained HTML file. No backend, no build step, no dependencies to install. Open it in a browser and it fetches live TLE data from CelesTrak, propagates real satellite positions using SGP4 orbital mechanics, and renders everything on an interactive 3D globe.
 
-<img width="1920" height="1058" alt="image" src="https://github.com/user-attachments/assets/8026ddc5-1009-4a78-940c-b679e80f85f8" />
+<img width="1919" height="1015" alt="Screenshot from 2026-03-31 22-09-28" src="https://github.com/user-attachments/assets/5f182024-0726-48e4-b068-c0739e4ed411" />
 
 
 ---
